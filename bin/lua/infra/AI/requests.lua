@@ -343,11 +343,11 @@ function AI_request.update_narrative(speaker_id, request_dialogue)
 	end
 
 	-- SAFETY TRAP: If narrative is stuck at a very long length (likely due to LLM failure), we force a reset.
-	if current_narrative and string.len(current_narrative) > 8500 then
+	if current_narrative and string.len(current_narrative) > 13500 then
 		logger.warn(
 			"Narrative length ("
 				.. string.len(current_narrative)
-				.. ") exceeds safety limit (8500). Forcing bootstrap reset."
+				.. ") exceeds safety limit (13500). Forcing bootstrap reset."
 		)
 
 		current_narrative = nil
