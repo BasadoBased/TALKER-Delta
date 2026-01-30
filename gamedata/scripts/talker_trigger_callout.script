@@ -52,30 +52,27 @@ function is_valid_callout(npc_obj, target_obj)
 
 
     -- Anti-spam check
-    -- We check the event store for recent events where a creature with the same name was spotted.
+    -- We check the event store for recent callout events with the same target name
     local target_name = queries.get_name(target_obj)
     local since_time = queries.get_game_time_ms() - repeated_callout_cooldown_ms
-    local recent_events = event_store:get_events_since(since_time)    
+    local recent_events = event_store:get_events_since(since_time)
+    
     for _, event in ipairs(recent_events) do
-        if event.description == "%s (%s %s, %s rep) spotted %s (%s %s, %s rep)!" or
-        event.description == "%s (%s %s, %s rep) spotted %s (%s faction)!" then
-            -- involved_objects: {spotter_name, spotter_rank, spotter_faction, spotter_reputation, target_name, ...}
-            local event_target_name = event.involved_objects and event.involved_objects[5]
-            if event_target_name then
-                if event_target_name == target_name then
-                    local time_ago = queries.get_game_time_ms() - event.game_time_ms
-                    
-                    -- Check if the event actually resulted in a callout (dialogue generated)
-                    -- Or if it's very recent (pending), give it a chance (e.g. 15 seconds)
-                    local PENDING_WINDOW_MS = 15 * 1000
-                    
-                    if event.dialogue_generated then
-                         log.info("Blocking repeated callout for %s. Similar target spotted %s ms ago (dialogue generated).", target_name, time_ago)
-                         return false
-                    elseif time_ago < PENDING_WINDOW_MS then
-                        log.info("Blocking repeated callout for %s. Similar target spotted %s ms ago (pending).", target_name, time_ago)
-                        return false
-                    end
+        -- Check if this is a callout event using flags instead of string matching
+        if event.flags and event.flags.is_callout and event.flags.target_name then
+            if event.flags.target_name == target_name then
+                local time_ago = queries.get_game_time_ms() - event.game_time_ms
+                
+                -- Check if the event actually resulted in a callout (dialogue generated)
+                -- Or if it's very recent (pending), give it a chance (e.g. 15 seconds)
+                local PENDING_WINDOW_MS = 15 * 1000
+                
+                if event.dialogue_generated then
+                    log.info("Blocking repeated callout for %s. Similar target spotted %s ms ago (dialogue generated).", target_name, time_ago)
+                    return false
+                elseif time_ago < PENDING_WINDOW_MS then
+                    log.info("Blocking repeated callout for %s. Similar target spotted %s ms ago (pending).", target_name, time_ago)
+                    return false
                 end
             end
         end
@@ -115,7 +112,10 @@ function on_enemy_eval(npc_obj, target_obj)
     local values = queries.join_tables(spotter_vals, enemy_vals)
     
     log.info(spotter.name .. " spotted " .. enemy.name)
-    trigger.talker_game_event(unformatted_description, values, witnesses, true, {is_callout = true})
+    trigger.talker_game_event(unformatted_description, values, witnesses, true, {
+        is_callout = true,
+        target_name = enemy.name
+    })
 
     -- Update global timer
     last_callout_time_ms = queries.get_game_time_ms()
