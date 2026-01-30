@@ -78,7 +78,7 @@ function openrouter.pick_speaker(msgs, cb)
 end
 
 function openrouter.summarize_story(msgs, cb)
-	return send(msgs, cb, { model = MODEL.fast, temperature = 0.2, max_tokens = 2500 })
+	return send(msgs, cb, { model = MODEL.fast, temperature = 0.2, max_tokens = 3500 })
 end
 
 return openrouter
