@@ -123,8 +123,9 @@ function actor_on_feeling_anomaly(anomaly)
         return
     end
 
-    local anomaly_name = queries.load_xml(section)
-    if anomaly_name == "" then return end -- Not a supported anomaly
+    -- Use strict check to only accept anomalies in talker_anomalies.xml
+    local anomaly_name = queries.load_xml_strict(section)
+    if anomaly_name == "" then return end
 
     -- Skip if the anomaly is not close enough OR if player rank is too high
     if is_valid_proximity_event(anomaly) then
@@ -140,13 +141,14 @@ function actor_on_hit_callback(obj, amount, local_direction, who, bone_index)
     if mode_damage == 1 then return end
     if not who then return end
     
-    -- Check if the source of damage is an anomaly we recognize
+    -- Use strict anomaly check (only accepts anomalies in talker_anomalies.xml)
+    if not queries.is_anomaly(who) then return end
+    
+    local anomaly_name = queries.get_anomaly_name(who)
+    if not anomaly_name then return end
+    
+    -- Filter out radioactive anomalies (kept for future extensibility)
     local section = who:section()
-    local anomaly_name = queries.load_xml(section)
-    
-    -- If load_xml returns an empty string, it's not in our list of supported anomalies
-    if anomaly_name == "" then return end
-    
     if string.find(section, "radioactive") or string.find(section, "radiation") then
         return
     end
