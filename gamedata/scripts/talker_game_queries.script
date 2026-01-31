@@ -108,6 +108,28 @@ function is_artifact(obj)
     return false
 end
 
+-- ANOMALIES
+
+function is_anomaly(obj)
+    if not obj then return false end
+    
+    -- Exclude players, stalkers, and monsters to prevent misattribution
+    if is_player(obj) or is_stalker(obj) or is_monster(obj) then 
+        return false 
+    end
+    
+    -- Use strict check: must be explicitly listed in talker_anomalies.xml
+    local section = obj:section()
+    local name = load_xml_strict(section)
+    
+    return name ~= ""
+end
+
+function get_anomaly_name(obj)
+    if not is_anomaly(obj) then return nil end
+    return load_xml_strict(obj:section())
+end
+
 -- PLAYER
 
 function get_player()
@@ -623,6 +645,18 @@ function load_xml(input)
             return ""
         end
     end
+    return result == "talkerIgnore" and "" or result
+end
+
+-- Load ONLY from talker_*.xml (no fallback to generic game translations)
+function load_xml_strict(input)
+    if not input then return "" end
+    local key = "talker_" .. input
+    local result = game.translate_string(key)
+    
+    -- If the key wasn't found, return empty string (no fallback)
+    if result == key then return "" end
+    
     return result == "talkerIgnore" and "" or result
 end
 
