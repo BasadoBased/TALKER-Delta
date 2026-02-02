@@ -138,22 +138,22 @@ local function safe_on_every_10_seconds()
     end
 end
 
--- Use CreateTimeEvent instead of actor_on_update for better stability
-local CHECK_INTERVAL_S = 10
-local timer_counter = 0
+-- Use level.add_call for a 100% safe, engine-level check that avoids actor_binder and event queue risks.
+local CHECK_INTERVAL_MS = 10 * 1000
 
 local function schedule_next_check()
-    timer_counter = timer_counter + 1
-    -- We use a unique action_id to prevent the engine from deleting our NEW event 
-    -- when it cleans up the CURRENT event upon returning true.
-    local action_id = "check_loop_" .. timer_counter
+    local target_time = queries.get_game_time_ms() + CHECK_INTERVAL_MS
     
-    -- Create a recursive timer loop
-    CreateTimeEvent("talker_idle_trigger", action_id, CHECK_INTERVAL_S, function()
+    local function condition()
+        return queries.get_game_time_ms() > target_time
+    end
+    
+    local function action()
         safe_on_every_10_seconds()
-        schedule_next_check() -- Re-schedule
-        return true -- Return true to indicate this event execution is finished
-    end)
+        schedule_next_check() -- Recursive call to schedule the NEXT interval
+    end
+    
+    level.add_call(condition, action)
 end
 
 function on_game_start()
