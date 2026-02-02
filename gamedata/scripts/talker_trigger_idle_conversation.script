@@ -74,7 +74,7 @@ function on_every_10_seconds()
  
     -- Check for a moment of silence suitable for idle conversation
     if has_anyone_spoken_recently() then
-        log.debug("Aborting idle chatter check, someone has spoken recently.")
+        log.spam("Aborting Idle Conversation: Someone has spoken recently.")
         return
     end
  
@@ -138,27 +138,37 @@ local function safe_on_every_10_seconds()
     end
 end
 
--- keep track of a timer and only do a real check every 10 seconds
-local last_check_time_ms = 0
-local CHECK_INTERVAL_MS = 10 * 1000
-local function on_every_ms()
-    if queries.get_game_time_ms() - last_check_time_ms < CHECK_INTERVAL_MS then return end
-    last_check_time_ms = queries.get_game_time_ms()
-    safe_on_every_10_seconds()
+-- Use CreateTimeEvent instead of actor_on_update for better stability
+local CHECK_INTERVAL_S = 10
+local timer_counter = 0
+
+local function schedule_next_check()
+    timer_counter = timer_counter + 1
+    -- We use a unique action_id to prevent the engine from deleting our NEW event 
+    -- when it cleans up the CURRENT event upon returning true.
+    local action_id = "check_loop_" .. timer_counter
+    
+    -- Create a recursive timer loop
+    CreateTimeEvent("talker_idle_trigger", action_id, CHECK_INTERVAL_S, function()
+        safe_on_every_10_seconds()
+        schedule_next_check() -- Re-schedule
+        return true -- Return true to indicate this event execution is finished
+    end)
 end
 
 function on_game_start()
     RegisterScriptCallback("save_state", save_state)
     RegisterScriptCallback("load_state", load_state)
-    RegisterScriptCallback("actor_on_update", on_every_ms)
+    
+    -- Start the loop
+    schedule_next_check()
 end
 
 function save_state(data)
-    data.talker_idle_last_check_time_ms = last_check_time_ms
+    -- We don't need to save last_check_time_ms anymore as CreateTimeEvent handles the timing
 end
 
 function load_state(data)
-    last_check_time_ms = data.talker_idle_last_check_time_ms or 0
     -- Reset the idle conversation cooldown to the current game time upon loading.
     -- This prevents an idle conversation from firing immediately after loading a save.
     last_idle_conversation_time_ms = queries.get_game_time_ms()
