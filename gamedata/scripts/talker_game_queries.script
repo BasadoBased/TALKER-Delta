@@ -242,8 +242,14 @@ function get_weapon_info(npc)
     must_exist(npc, "get_weapon_info")
     
     local active_item = try(npc.active_item, npc)
-    local best_weapon = try(npc.best_weapon, npc)
-    local is_unstrapped = try(npc.weapon_unstrapped, npc)
+    local best_weapon = nil
+    local is_unstrapped = nil
+
+    -- Optimization: Only call AI methods if NOT the player
+    if not is_player(npc) then
+        best_weapon = try(npc.best_weapon, npc)
+        is_unstrapped = try(npc.weapon_unstrapped, npc)
+    end
     
     -- Pick the best available weapon object. For the player, active_item is primary.
     local weapon_obj = (active_item and is_weapon(active_item)) and active_item or best_weapon
@@ -259,7 +265,7 @@ function get_weapon_info(npc)
     if is_unstrapped == true then
         state = "wielding"
     elseif is_unstrapped == nil then
-        -- Fallback if engine support is missing
+        -- Fallback if engine support is missing, or if it is the player with an active weapon
         if active_item and is_weapon(active_item) then
             state = "wielding"
         end
