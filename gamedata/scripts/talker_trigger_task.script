@@ -178,7 +178,7 @@ function on_task_completed_event(tsk, cached_info)
     }
     
     -- Try to get text rank name
-    if ranks and ranks.get_se_obj_rank_name then
+    if ranks and ranks.get_se_obj_rank_name and type(server_entity.rank) == "function" then
          task_giver_character.experience = ranks.get_se_obj_rank_name(server_entity)
     end
 
