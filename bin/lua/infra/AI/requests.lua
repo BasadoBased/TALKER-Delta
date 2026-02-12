@@ -343,24 +343,25 @@ function AI_request.update_narrative(speaker_id, request_dialogue)
 	end
 
 	-- SAFETY TRAP: If narrative is stuck at a very long length (likely due to LLM failure), we force a reset.
-	if current_narrative and string.len(current_narrative) > 13500 then
-		logger.warn(
-			"Narrative length ("
-				.. string.len(current_narrative)
-				.. ") exceeds safety limit (13500). Forcing bootstrap reset."
-		)
-
-		current_narrative = nil
-		context.narrative = nil -- Clear local ref so bootstrapping logic below picks it up
-
-		-- Refetch ALL events to ensure we rebuild history from scratch (true bootstrapping)
-		-- Otherwise we'd only have the tiny delta of 'new_events', resulting in amnesia.
-		new_events = memory_store:get_memories(speaker_id)
-		if not new_events then
-			new_events = {}
-		end
-		context.new_events = new_events
-	end
+	-- Disabled for now as it's not working as intended and I'm looking at a better solution.
+	--	if current_narrative and string.len(current_narrative) > 13500 then
+	--		logger.warn(
+	--			"Narrative length ("
+	--				.. string.len(current_narrative)
+	--				.. ") exceeds safety limit (13500). Forcing bootstrap reset."
+	--		)
+	--
+	--		current_narrative = nil
+	--		context.narrative = nil -- Clear local ref so bootstrapping logic below picks it up
+	--
+	--		-- Refetch ALL events to ensure we rebuild history from scratch (true bootstrapping)
+	--		-- Otherwise we'd only have the tiny delta of 'new_events', resulting in amnesia.
+	--		new_events = memory_store:get_memories(speaker_id)
+	--		if not new_events then
+	--			new_events = {}
+	--		end
+	--		context.new_events = new_events
+	--	end
 
 	-- Bootstrapping: If Long-Term Memory is empty, check if this is truly a migration scenario
 	if not current_narrative or current_narrative == "" then
