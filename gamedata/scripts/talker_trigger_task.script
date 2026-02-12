@@ -167,10 +167,13 @@ function on_task_completed_event(tsk, cached_info)
 
     -- Manually create character info with safe fallbacks
     -- Not all server entities have character_name() (e.g., traders, offline NPCs)
+    -- Also protect against race conditions where entity is deleted mid-execution
     local task_giver_character = {
-        name = (server_entity.character_name and server_entity:character_name()) or server_entity:name() or "Unknown",
-        experience = server_entity:rank() or 0,
-        faction = tostring(server_entity:community() or "unknown"),
+        name = (type(server_entity.character_name) == "function" and server_entity:character_name()) 
+               or (type(server_entity.name) == "function" and server_entity:name()) 
+               or "Unknown",
+        experience = (type(server_entity.rank) == "function" and server_entity:rank()) or 0,
+        faction = tostring((type(server_entity.community) == "function" and server_entity:community()) or "unknown"),
         reputation = rep_tier
     }
     
