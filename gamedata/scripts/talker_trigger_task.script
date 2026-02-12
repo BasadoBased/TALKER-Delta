@@ -165,11 +165,12 @@ function on_task_completed_event(tsk, cached_info)
     
     local rep_tier = queries.get_reputation_tier(rep_val)
 
-    -- Manually create character info
+    -- Manually create character info with safe fallbacks
+    -- Not all server entities have character_name() (e.g., traders, offline NPCs)
     local task_giver_character = {
-        name = server_entity:character_name(),
-        experience = server_entity:rank(), -- Returns number
-        faction = tostring(server_entity:community()),
+        name = (server_entity.character_name and server_entity:character_name()) or server_entity:name() or "Unknown",
+        experience = server_entity:rank() or 0,
+        faction = tostring(server_entity:community() or "unknown"),
         reputation = rep_tier
     }
     
