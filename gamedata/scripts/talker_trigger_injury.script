@@ -32,14 +32,38 @@ function actor_on_hit_callback(obj, amount, local_direction, who, bone_index)
     local threshold = tonumber(mcm.get("injury_threshold")) or 0.4
     if not (db.actor and db.actor.health < threshold) then return end
 
+    -- Filter out all listed anomalies AND radiation damage (prevents misattributed combat dialogue)
+    if queries.is_anomaly(who) then return end
+    if who then
+        local section = who:section()
+        if string.find(section, "radioactive") or string.find(section, "radiation") then
+            return
+        end
+    end
+
     local player = game.get_player_character()
-    local attacker = game.create_character(who)
     local witnesses = game.get_characters_near_player()
-    
     local player_fmt, player_vals = queries.get_character_event_info(player)
-    local attacker_fmt, attacker_vals = queries.get_character_event_info(attacker)
-    local unformatted_description = player_fmt .. " was critically injured while fighting " .. attacker_fmt .. "!"
-    local values = queries.join_tables(player_vals, attacker_vals)
+    
+    local unformatted_description = ""
+    local values = {}
+    
+    -- Check for self-damage (grenades, etc.) or environmental damage
+    if who and queries.is_player(who) then
+        -- Self-damage
+        unformatted_description = player_fmt .. " critically injured themselves!"
+        values = player_vals
+    elseif who then
+        -- Normal combat damage from another entity
+        local attacker = game.create_character(who)
+        local attacker_fmt, attacker_vals = queries.get_character_event_info(attacker)
+        unformatted_description = player_fmt .. " was critically injured while fighting " .. attacker_fmt .. "!"
+        values = queries.join_tables(player_vals, attacker_vals)
+    else
+        -- Environmental damage (who is nil)
+        unformatted_description = player_fmt .. " was critically injured!"
+        values = player_vals
+    end
     
     logger.info("%s: %s", script_name, unformatted_description)
     
