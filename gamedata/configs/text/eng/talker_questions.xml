@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<string_table>
+	<string id="talker_questions_1">
+		<text>what they did for a living before they decided to cross the perimeter.</text>
+	</string>
+	<string id="talker_questions_2">
+		<text>if they have anyone waiting for them back on the outside.</text>
+	</string>
+	<string id="talker_questions_3">
+		<text>what the very first thing they plan to buy is if they ever strike it rich and leave the Zone.</text>
+	</string>
+	<string id="talker_questions_4">
+		<text>whether they believe the Zone is expanding or if the scientists are just trying to scare us.</text>
+	</string>
+	<string id="talker_questions_5">
+		<text>which faction they think has the right idea about how to handle the Zone.</text>
+	</string>
+	<string id="talker_questions_6">
+		<text>about the most terrifying thing they have ever seen in the dark.</text>
+	</string>
+	<string id="talker_questions_7">
+		<text>if they think the 'Wish Granter' is a real thing or just a campfire fairy tale for rookies.</text>
+	</string>
+	<string id="talker_questions_8">
+		<text>what their favorite piece of gear is and why they trust it so much.</text>
+	</string>
+	<string id="talker_questions_9">
+		<text>if they ever miss the sound of rain on a regular tin roof instead of the constant threat of a psy-storm.</text>
+	</string>
+	<string id="talker_questions_10">
+		<text>whether they prefer the reliability of an old AK or the precision of those fancy Western rifles.</text>
+	</string>
+	<string id="talker_questions_11">
+		<text>how they managed to survive their very first night in the Zone.</text>
+	</string>
+	<string id="talker_questions_12">
+		<text>if they believe that some mutants, like the Snorks, still have a tiny bit of humanity left in them.</text>
+	</string>
+	<string id="talker_questions_13">
+		<text>what the most 'normal' thing they miss from the outside world is.</text>
+	</string>
+	<string id="talker_questions_14">
+		<text>if they've ever had a dream that felt like the Zone was trying to tell them something.</text>
+	</string>
+	<string id="talker_questions_15">
+		<text>whether they trust the traders like Sidorovich, or if they think they're all just leeches.</text>
+	</string>
+	<string id="talker_questions_16">
+		<text>what they would do if they found a 'Goldfish' artifact tomorrow morning.</text>
+	</string>
+	<string id="talker_questions_17">
+		<text>if they think the Military is actually trying to protect the world, or if they're just legalized bandits.</text>
+	</string>
+	<string id="talker_questions_18">
+		<text>about the first person they met when they entered the Zone.</text>
+	</string>
+	<string id="talker_questions_19">
+		<text>how many times they've come close to 'losing it' out here in the wasteland.</text>
+	</string>
+	<string id="talker_questions_20">
+		<text>if they think the Monolithians are brainwashed or if they've actually seen something we haven't.</text>
+	</string>
+	<string id="talker_questions_21">
+		<text>which mutant they hate fighting the most.</text>
+	</string>
+	<string id="talker_questions_22">
+		<text>whether they believe the Zone has a 'center' that controls everything.</text>
+	</string>
+	<string id="talker_questions_23">
+		<text>what kind of music they used to listen to before they came here.</text>
+	</string>
+	<string id="talker_questions_24">
+		<text>if they've ever had to leave a friend behind to save their own skin.</text>
+	</string>
+	<string id="talker_questions_25">
+		<text>how they keep their boots from rotting off in these radioactive swamps.</text>
+	</string>
+	<string id="talker_questions_26">
+		<text>if they think it's possible to ever truly 'tame' the Zone.</text>
+	</string>
+	<string id="talker_questions_27">
+		<text>what they think about the stories regarding the 'Oasis'.</text>
+	</string>
+	<string id="talker_questions_28">
+		<text>if they remember the last time they saw a clear blue sky without a hint of smog or radiation.</text>
+	</string>
+	<string id="talker_questions_29">
+		<text>whether they think Freedom's idea of a 'free Zone' would actually work or just lead to chaos.</text>
+	</string>
+	<string id="talker_questions_30">
+		<text>what the best piece of advice a veteran stalker ever gave them was.</text>
+	</string>
+	<string id="talker_questions_31">
+		<text>if they've ever found a stash that felt like it belonged to someone they knew.</text>
+	</string>
+	<string id="talker_questions_32">
+		<text>about the most expensive thing they've ever sold to a trader.</text>
+	</string>
+	<string id="talker_questions_33">
+		<text>if they think the 'Brain Scorcher' was a natural phenomenon or a man-made nightmare.</text>
+	</string>
+	<string id="talker_questions_34">
+		<text>how they feel about the Ecologists and their constant poking at things that should be left alone.</text>
+	</string>
+	<string id="talker_questions_35">
+		<text>if they have a 'lucky' routine they do before heading out on a long excursion.</text>
+	</string>
+	<string id="talker_questions_36">
+		<text>what they would name their own bar if they ever decided to hang up the rifle and settle down.</text>
+	</string>
+	<string id="talker_questions_37">
+		<text>if they think we're all just slow-walking ghosts waiting for our time to come.</text>
+	</string>
+	<string id="talker_questions_38">
+		<text>about the time they were most tempted to just pack up and walk back toward the perimeter.</text>
+	</string>
+	<string id="talker_questions_39">
+		<text>whether they think artifacts are a gift to humanity or a curse in disguise.</text>
+	</string>
+	<string id="talker_questions_40">
+		<text>if they've ever heard the 'voices' people talk about when they get too close to the Red Forest.</text>
+	</string>
+	<string id="talker_questions_41">
+		<text>what they think the 'Great Emission' actually changed in the Zone.</text>
+	</string>
+	<string id="talker_questions_42">
+		<text>if they think the Bandits are getting more organized lately.</text>
+	</string>
+	<string id="talker_questions_43">
+		<text>how they stay focused when they've been sitting in a bush for six hours waiting for a target.</text>
+	</string>
+	<string id="talker_questions_44">
+		<text>if they believe there are parts of the Zone that haven't been mapped yet.</text>
+	</string>
+	<string id="talker_questions_45">
+		<text>what their opinion is on the 'Mercs' and who might be funding them.</text>
+	</string>
+	<string id="talker_questions_46">
+		<text>if they've ever found a piece of pre-1986 history while scavenging in the ruins.</text>
+	</string>
+	<string id="talker_questions_47">
+		<text>how they deal with the constant hunger when supplies run low.</text>
+	</string>
+	<string id="talker_questions_48">
+		<text>if they think they'll ever see their old home again.</text>
+	</string>
+	<string id="talker_questions_49">
+		<text>what the weirdest anomaly they've ever blundered into was.</text>
+	</string>
+	<string id="talker_questions_50">
+		<text>if they think the Zone 'remembers' the people who die here.</text>
+	</string>
+	<string id="talker_questions_51">
+		<text>whether they'd rather face a pack of blind dogs or a single, hungry Bloodsucker.</text>
+	</string>
+	<string id="talker_questions_52">
+		<text>if they think the world outside even cares what happens to us in here.</text>
+	</string>
+	<string id="talker_questions_53">
+		<text>about the first time they ever used a bolt to find a path through a field of anomalies.</text>
+	</string>
+	<string id="talker_questions_54">
+		<text>if they've ever seen a 'Poltergeist' and lived to tell the story.</text>
+	</string>
+	<string id="talker_questions_55">
+		<text>what their 'comfort food' in the Zone is, if such a thing even exists.</text>
+	</string>
+	<string id="talker_questions_56">
+		<text>if they think the legends about Strelok are true.</text>
+	</string>
+	<string id="talker_questions_57">
+		<text>whether they believe in 'luck', or if survival is just 100% preparation.</text>
+	</string>
+	<string id="talker_questions_58">
+		<text>what the most useless item they've ever seen a rookie carry into the Zone was.</text>
+	</string>
+	<string id="talker_questions_59">
+		<text>if they think the Zone is a punishment for something humanity did wrong.</text>
+	</string>
+	<string id="talker_questions_60">
+		<text>how they sleep at night knowing that an emission could hit at any moment.</text>
+	</string>
+	<string id="talker_questions_61">
+		<text>if they've ever seen those 'ghost' artifacts that supposedly disappear if you look at them too long.</text>
+	</string>
+	<string id="talker_questions_62">
+		<text>what their first kill in the Zone felt like.</text>
+	</string>
+	<string id="talker_questions_63">
+		<text>if they think the 'Clear Sky' faction actually know more than they let on.</text>
+	</string>
+	<string id="talker_questions_64">
+		<text>how they think the Zone will look ten years from now.</text>
+	</string>
+	<string id="talker_questions_65">
+		<text>if they've ever heard of a stalker who managed to strike it rich in the Zone and make it out alive.</text>
+	</string>
+	<string id="talker_questions_66">
+		<text>whether they think Duty's discipline is necessary for survival or just a way to control people.</text>
+	</string>
+	<string id="talker_questions_67">
+		<text>what the most 'human' thing they've seen a mutant do is.</text>
+	</string>
+	<string id="talker_questions_68">
+		<text>if they think the 'Black Market' prices for artifacts are finally starting to drop.</text>
+	</string>
+	<string id="talker_questions_69">
+		<text>how they manage to keep their weapon from jamming in all this dirt and grime.</text>
+	</string>
+	<string id="talker_questions_70">
+		<text>if they've ever found a location in the Zone that actually felt peaceful for a few minutes.</text>
+	</string>
+	<string id="talker_questions_71">
+		<text>what they think about the 'Pseudo-giants' and where something that big even finds enough to eat.</text>
+	</string>
+	<string id="talker_questions_72">
+		<text>if they think we're all just 'bugs under a magnifying glass' for some higher power.</text>
+	</string>
+	<string id="talker_questions_73">
+		<text>about the worst weather they've ever had to hike through.</text>
+	</string>
+	<string id="talker_questions_74">
+		<text>if they believe that some stalkers can 'talk' to the anomalies.</text>
+	</string>
+	<string id="talker_questions_75">
+		<text>what they miss most about the city they grew up in.</text>
+	</string>
+	<string id="talker_questions_76">
+		<text>if they heard the rumours that 'Controller' mutants used to be people who were experimented on in the underground labs.</text>
+	</string>
+	<string id="talker_questions_77">
+		<text>whether the spatial anomalies found in the Zone might be portals to other worlds, and whether they've ever entered one.</text>
+	</string>
+	<string id="talker_questions_78">
+		<text>what their go-to story is when they're sitting around a campfire with strangers.</text>
+	</string>
+	<string id="talker_questions_79">
+		<text>if they've ever had to eat something they couldn't identify just to stay alive.</text>
+	</string>
+	<string id="talker_questions_80">
+		<text>how they feel about the 'Zombie' stalkers - is killing them mercy or murder?</text>
+	</string>
+	<string id="talker_questions_81">
+		<text>if they think there's such a thing as a 'good' person left in the Zone.</text>
+	</string>
+	<string id="talker_questions_82">
+		<text>about the most beautiful thing they've seen out here, despite all the death.</text>
+	</string>
+	<string id="talker_questions_83">
+		<text>if they think the 'Blueprints' for advanced gear are actually being leaked by the Military.</text>
+	</string>
+	<string id="talker_questions_84">
+		<text>what they would do if they woke up tomorrow and the perimeter was gone.</text>
+	</string>
+	<string id="talker_questions_85">
+		<text>if they think the Zone chooses who gets to stay and who has to die - and what one might need to do to gain her favour.</text>
+	</string>
+	<string id="talker_questions_86">
+		<text>how they feel about the 'Renegades' and why anyone would choose to live like that.</text>
+	</string>
+	<string id="talker_questions_87">
+		<text>if they've ever found a stash that they were too afraid to actually open.</text>
+	</string>
+	<string id="talker_questions_88">
+		<text>what their opinion on 'Artifact Hunting' as a career is versus just being a hired gun.</text>
+	</string>
+	<string id="talker_questions_89">
+		<text>if they think we're all just becoming part of the Zone ourselves, bit by bit.</text>
+	</string>
+	<string id="talker_questions_90">
+		<text>if they ever worry about their family on the outside.</text>
+	</string>
+	<string id="talker_questions_91">
+		<text>if they believe in any 'Zone ghosts' that aren't just mutants or anomalies.</text>
+	</string>
+	<string id="talker_questions_92">
+		<text>about the time they were most glad to have a medkit on their belt.</text>
+	</string>
+	<string id="talker_questions_93">
+		<text>if they think the 'C-Consciousness' is just a myth or a terrifying reality.</text>
+	</string>
+	<string id="talker_questions_94">
+		<text>what they would say to someone who was thinking about crossing the perimeter for the first time.</text>
+	</string>
+	<string id="talker_questions_95">
+		<text>if they think the 'Dark Valley' is actually cursed or just a hotspot for Bandits.</text>
+	</string>
+	<string id="talker_questions_96">
+		<text>how they feel about the 'Loners' and why we don't just all team up.</text>
+	</string>
+	<string id="talker_questions_97">
+		<text>if theyve ever seen a 'Burer' and if so how they managed to keep hold of their weapon.</text>
+	</string>
+	<string id="talker_questions_98">
+		<text>what they think the scientists are actually doing with all those artifacts they're buying.</text>
+	</string>
+	<string id="talker_questions_99">
+		<text>if they think the 'Radioactive Bread' stories are just a prank played on rookies.</text>
+	</string>
+	<string id="talker_questions_100">
+		<text>how they keep their sanity when the 'Whispers' start after three days without sleep.</text>
+	</string>
+	<string id="talker_questions_101">
+		<text>if they think the Zone is the most dangerous place on Earth, or if the 'real' world is worse.</text>
+	</string>
+	<string id="talker_questions_102">
+		<text>what their favorite 'stalker legend' is.</text>
+	</string>
+	<string id="talker_questions_103">
+		<text>if they believe there's a way to shut the Zone down for good.</text>
+	</string>
+	<string id="talker_questions_104">
+		<text>about the last time they had a meal that wasn't out of a can.</text>
+	</string>
+	<string id="talker_questions_105">
+		<text>if they think the 'Flesh' mutants are actually as pathetic as they look.</text>
+	</string>
+	<string id="talker_questions_106">
+		<text>how they think their life would have turned out if they'd never heard of the Zone.</text>
+	</string>
+	<string id="talker_questions_107">
+		<text>if they watched the last fight in Arnie's arena in Rostok.</text>
+	</string>
+	<string id="talker_questions_108">
+		<text>what they think about the 'Pripyat' urban legends.</text>
+	</string>
+	<string id="talker_questions_109">
+		<text>if they think we'll ever find out what actually caused the second Chernobyl NPP explosion.</text>
+	</string>
+	<string id="talker_questions_110">
+		<text>whether they believe that some artifacts can actually talk to you.</text>
+	</string>
+</string_table>
