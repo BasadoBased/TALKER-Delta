@@ -250,6 +250,8 @@ function prompt_builder.create_update_narrative_prompt(speaker, current_narrativ
 				or flags.is_weapon_jam
 				or flags.is_callout
 				or flags.is_taunt
+				or flags.is_injury
+				or flags.is_junk_reply
 			)
 
 		if not is_junk then
@@ -479,6 +481,8 @@ function prompt_builder.create_compress_memories_prompt(raw_events, speaker)
 				or flags.is_weapon_jam
 				or flags.is_callout
 				or flags.is_taunt
+				or flags.is_injury
+				or flags.is_junk_reply
 			)
 
 		-- Skip junk events to preserve summary conciseness
@@ -1071,18 +1075,29 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 		-- Use MCM settings to determine chance of asking the player a question
 		local pick_question = math.random() < mcm.get("idle_question_chance")
 
+		if mcm.get("companion_only_questions") and not query.is_companion(speaker_obj) then
+			pick_question = false
+		end
+
 		if pick_question then
 			local player = game.get_player_character()
-			idle_instruction = "Your character decides to ask "
+			local question = query.load_random_xml("questions")
+			if not question or question == "" then
+				-- super fallback if xml fails
+				question = "what they think of life in the Zone."
+			end
+			idle_instruction = " Your character decides to ask "
 				.. player.name
-				.. " (the user) a question. It can be about their past experiences, opinions on recent events, an anecdote, something about their life before coming to the Zone or anything else that interests you, that you are curious about or that you feel would help you get to know them better. "
+				.. " (the user) "
+				.. question
+				.. " Your response should be phrased as a question, ending with a question mark."
 		else
 			local topic = query.load_random_xml("topics")
 			if not topic or topic == "" then
 				-- super fallback if xml fails
 				topic = "life in the Zone."
 			end
-			idle_instruction = "Your character decides to strike up a random conversation on the subject of: " .. topic
+			idle_instruction = " Your character decides to strike up a random conversation on the subject of: " .. topic
 		end
 	end
 
