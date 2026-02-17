@@ -181,30 +181,40 @@ function m.create_dialogue_event(speaker_id, dialogue, source_event)
 
 	-- Propagate is_whisper flag from source event
 	if source_event and source_event.flags and source_event.flags.is_whisper then
-		-- Whisper mode: only companions can witness
+		flags.is_whisper = true
+		flags.is_dialogue = true
 		witnesses = m.get_companions()
-		flags = { is_whisper = true, is_dialogue = true }
 		log.debug("Creating whisper dialogue event with companion-only witnesses")
-		local dialogue_event = m.create_game_event(
-			speaker_format .. " whispered to companions: %s",
-			query.join_tables(speaker_values, { dialogue }),
-			witnesses,
-			flags
-		)
-		return dialogue_event
 	else
-		-- Normal mode: nearby characters can witness
+		flags.is_dialogue = true
 		witnesses = m.get_characters_near(speaker_obj)
-		flags = { is_dialogue = true }
-		log.debug("Creating normal dialogue event with nearby witnesses")
-		local dialogue_event = m.create_game_event(
-			speaker_format .. " said: %s",
-			query.join_tables(speaker_values, { dialogue }),
-			witnesses,
-			flags
-		)
-		return dialogue_event
 	end
+
+	-- Check for "Junk" source events (injuries, reloads, etc.)
+	if source_event and source_event.flags then
+		local s_flags = source_event.flags
+		local is_junk = (
+			s_flags.is_artifact
+			or s_flags.is_anomaly
+			or s_flags.is_reload
+			or s_flags.is_weapon_jam
+			or s_flags.is_callout
+			or s_flags.is_taunt
+			or s_flags.is_injury
+		)
+
+		if is_junk then
+			flags.is_junk_reply = true
+		end
+	end
+
+	local dialogue_event = m.create_game_event(
+		speaker_format .. (flags.is_whisper and " whispered to companions: %s" or ": %s"),
+		query.join_tables(speaker_values, { dialogue }),
+		witnesses,
+		flags
+	)
+	return dialogue_event
 end
 
 ------------------------------------------------------------
