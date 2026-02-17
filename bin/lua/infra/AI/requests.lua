@@ -626,6 +626,13 @@ function AI_request.request_dialogue(speaker_id, callback)
 			logger.error("Error generating dialogue")
 			return
 		end
+
+		-- Validate response against policy/junk filters
+		if not dialogue_cleaner.was_response_valid(generated_dialogue) then
+			logger.warn("AI response rejected by validation filter: " .. tostring(generated_dialogue))
+			return
+		end
+
 		logger.info("Received dialogue: " .. generated_dialogue)
 		generated_dialogue = dialogue_cleaner.improve_response_text(generated_dialogue) -- remove censorship and other unwanted content
 		callback(generated_dialogue, timestamp_to_delete)
