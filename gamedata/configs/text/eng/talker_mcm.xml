@@ -349,6 +349,9 @@
     <string id="ui_mcm_talker_recent_speech_threshold">
         <text>Minimum window of silence (since the last time anyone said anything) before idle conversation is attempted (seconds)</text>
     </string>
+    <string id="ui_mcm_talker_companion_only_questions">
+        <text>Only companions ask the player questions.</text>
+    </string>
     <string id="ui_mcm_talker_idle_question_chance">
         <text>Percentage chance to ask the player a question instead of starting idle conversation</text>
     </string>
