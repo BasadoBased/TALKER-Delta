@@ -83,6 +83,13 @@ function is_weapon(item)
     return IsWeapon(item)
 end
 
+function is_binoc(item)
+    if not item then return false end
+    local section = item:section()
+    local kind = SYS_GetParam(0, section, "kind", "")
+    return kind == "w_misc" or kind == "w_binoc"
+end
+
 function is_artifact(obj)
     if not obj then return false end
     
@@ -238,20 +245,54 @@ function get_weapon(npc)
     return try(npc.active_item, npc)
 end
 
+
+function get_player_weapon_state(player)
+    if not player then return nil, "No weapon" end
+
+    -- 1. Check Active Item (Highest Priority)
+    local active_item = player:active_item()
+    if active_item and is_weapon(active_item) then
+        local weapon_name = get_item_description(active_item)
+        if game.actor_weapon_lowered() then
+            return weapon_name, "holstered"
+        else
+            return weapon_name, "wielding"
+        end
+    end
+
+    -- 2. Check Holstered Slots (Priority: Rifle1 -> Rifle2 -> Pistol -> Knife -> Binoc)
+    -- Slots: 2 (Rifle 1), 3 (Rifle 2), 1 (Pistol), 0 (Knife), 4 (Binoc)
+    local slots_to_check = {2, 3, 1, 0, 4}
+    
+    for _, slot_id in ipairs(slots_to_check) do
+        local item = player:item_in_slot(slot_id)
+        if item then
+            -- Filter out actual binoculars in the binocular slot
+            if slot_id == 4 and is_binoc(item) then
+                -- Skip this item
+            elseif is_weapon(item) then
+                return get_item_description(item), "holstered"
+            end
+        end
+    end
+
+    -- 3. Fallback
+    return nil, "No weapon"
+end
+
 function get_weapon_info(npc)
     must_exist(npc, "get_weapon_info")
     
-    local active_item = try(npc.active_item, npc)
-    local best_weapon = nil
-    local is_unstrapped = nil
-
-    -- Optimization: Only call AI methods if NOT the player
-    if not is_player(npc) then
-        best_weapon = try(npc.best_weapon, npc)
-        is_unstrapped = try(npc.weapon_unstrapped, npc)
+    -- Special handling for player to detect "Holstered" state more accurately
+    if is_player(npc) then
+        return get_player_weapon_state(npc)
     end
     
-    -- Pick the best available weapon object. For the player, active_item is primary.
+    local active_item = try(npc.active_item, npc)
+    local best_weapon = try(npc.best_weapon, npc)
+    local is_unstrapped = try(npc.weapon_unstrapped, npc)
+    
+    -- Pick the best available weapon object.
     local weapon_obj = (active_item and is_weapon(active_item)) and active_item or best_weapon
     
     if not weapon_obj then
@@ -265,20 +306,15 @@ function get_weapon_info(npc)
     if is_unstrapped == true then
         state = "wielding"
     elseif is_unstrapped == nil then
-        -- Fallback if engine support is missing, or if it is the player with an active weapon
+        -- Fallback if engine support is missing
         if active_item and is_weapon(active_item) then
             state = "wielding"
         end
     end
     
-    -- Special case for the player: if they have a weapon in hand, it's effectively "wielding"
-    -- even if unstrapped is false (e.g., during a reload animation)
-    if is_player(npc) and active_item and is_weapon(active_item) then
-        state = "wielding"
-    end
-    
     return weapon_str, state
 end
+
 
 -- RELATIONS
 
