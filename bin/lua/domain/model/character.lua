@@ -39,7 +39,11 @@ function Character.describe(character)
 		character.personality
 	)
 	if character.weapon then
-		description = description .. " wielding a " .. character.weapon
+		if character.weapon_status == "holstered" then
+			description = description .. " with a holstered " .. character.weapon
+		else
+			description = description .. " wielding a " .. character.weapon
+		end
 	end
 	return description
 end
