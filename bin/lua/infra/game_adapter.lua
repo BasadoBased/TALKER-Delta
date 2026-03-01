@@ -183,10 +183,12 @@ function m.create_dialogue_event(speaker_id, dialogue, source_event)
 	if source_event and source_event.flags and source_event.flags.is_whisper then
 		flags.is_whisper = true
 		flags.is_dialogue = true
+		flags.speaker_id = tostring(speaker_id) -- record who spoke for double-trigger prevention
 		witnesses = m.get_companions()
 		log.debug("Creating whisper dialogue event with companion-only witnesses")
 	else
 		flags.is_dialogue = true
+		flags.speaker_id = tostring(speaker_id) -- record who spoke for double-trigger prevention
 		witnesses = m.get_characters_near(speaker_obj)
 	end
 
