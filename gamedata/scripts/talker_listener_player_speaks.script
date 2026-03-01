@@ -15,7 +15,7 @@ function talker_on_player_speaks(dialogue)
     local player_fmt, player_vals = queries.get_character_event_info(player)
     local unformatted_description = player_fmt .. " said: %s"
     local combined_values = queries.join_tables(player_vals, {dialogue})
-    trigger.talker_game_event_near_player(unformatted_description, combined_values, true, {is_dialogue = true})
+    trigger.talker_game_event_near_player(unformatted_description, combined_values, true, {is_dialogue = true, speaker_id = tostring(player.game_id)})
 end
 
 function talker_safely_on_player_speaks(dialogue)
