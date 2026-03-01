@@ -96,6 +96,33 @@ end
 -- Core functions
 ------------------------------------------------------------------------------------------
 
+-- Helper to extract the speaker ID from an event.
+-- Priority:
+--   1. flags.speaker_id  — set explicitly by create_dialogue_event and player-speaks/whispers listener.
+--   2. involved_objects[1].game_id — fallback for non-dialogue events (callouts, deaths, etc.)
+--      where the first involved object IS a proper character object.
+-- We deliberately do NOT fall back to witnesses, because witnesses are observers,
+-- not the speaker, so witnesses[1] would be an arbitrary nearby character.
+local function extract_speaker_id(event)
+	if not event then
+		return nil
+	end
+	-- 1. Definitive source: explicitly stored speaker_id on flags
+	if event.flags and event.flags.speaker_id then
+		return event.flags.speaker_id
+	end
+	-- 2. Fallback: character object in involved_objects (non-dialogue events)
+	if
+		event.involved_objects
+		and event.involved_objects[1]
+		and type(event.involved_objects[1]) == "table"
+		and event.involved_objects[1].game_id
+	then
+		return event.involved_objects[1].game_id
+	end
+	return nil
+end
+
 local function check_if_id_in_recent_events(recent_events, picked_speaker_id)
 	local latest_event = recent_events[#recent_events]
 	local witnesses = latest_event.witnesses
@@ -118,12 +145,22 @@ local function is_valid_speaker(recent_events, picked_speaker_id)
 	end
 
 	-- get current game time from the most recent event
-	local current_game_time = recent_events[#recent_events].game_time_ms
+	local last_event = recent_events[#recent_events]
+	local current_game_time = last_event.game_time_ms
 
 	-- check if speaker is on cooldown
 	if is_speaker_on_cooldown(picked_speaker_id, current_game_time) then
 		logger.info("AI picked speaker on cooldown: " .. picked_speaker_id)
 		return false
+	end
+
+	-- prevent double-trigger if the very last event was dialogue from this speaker
+	if last_event.flags and last_event.flags.is_dialogue then
+		local last_speaker = extract_speaker_id(last_event)
+		if last_speaker and tostring(last_speaker) == tostring(picked_speaker_id) then
+			logger.info("AI picked speaker who just spoke (double-trigger prevented): " .. picked_speaker_id)
+			return false
+		end
 	end
 
 	logger.info("Picked next speaker: " .. picked_speaker_id)
@@ -146,10 +183,27 @@ function AI_request.pick_speaker(recent_events, compress_memories)
 	end
 
 	-- Get current game time from the most recent event
-	local current_game_time = recent_events[#recent_events].game_time_ms
+	local last_event = recent_events[#recent_events]
+	local current_game_time = last_event.game_time_ms
 
-	-- Filter out speakers on cooldown
-	local available_speakers = filter_speakers_by_cooldown(speakers, current_game_time)
+	-- Identify if the last event was a dialogue, to prevent double-trigger
+	local last_dialogue_speaker_id = nil
+	if last_event.flags and last_event.flags.is_dialogue then
+		last_dialogue_speaker_id = extract_speaker_id(last_event)
+	end
+
+	-- Filter out speakers on cooldown or who just spoke
+	local cooldown_speakers = filter_speakers_by_cooldown(speakers, current_game_time)
+	local available_speakers = {}
+	for _, s in ipairs(cooldown_speakers) do
+		if last_dialogue_speaker_id and tostring(s.game_id) == tostring(last_dialogue_speaker_id) then
+			logger.debug(
+				"Speaker " .. s.game_id .. " just spoke in the latest event, skipping to prevent double-trigger."
+			)
+		else
+			table.insert(available_speakers, s)
+		end
+	end
 
 	if #available_speakers == 0 then
 		logger.info("All potential speakers are on cooldown")
@@ -162,28 +216,6 @@ function AI_request.pick_speaker(recent_events, compress_memories)
 		AI_request.set_speaker_last_spoke(selected_speaker_id, current_game_time) -- Set cooldown
 		logger.debug("Compressing memories after picking speaker")
 		return compress_memories(selected_speaker_id)
-	end
-
-	-- Helper to reliably extract speaker ID
-	local function extract_speaker_id(event)
-		if not event then
-			return nil
-		end
-		-- Try involved_objects first (if they are character objects)
-		if
-			event.involved_objects
-			and event.involved_objects[1]
-			and type(event.involved_objects[1]) == "table"
-			and event.involved_objects[1].game_id
-		then
-			return event.involved_objects[1].game_id
-		end
-		-- Fallback to witnesses (guaranteed to be character objects)
-		-- The speaker is virtually always the first witness to their own event
-		if event.witnesses and event.witnesses[1] and event.witnesses[1].game_id then
-			return event.witnesses[1].game_id
-		end
-		return nil
 	end
 
 	-- Determine context from last speaker
