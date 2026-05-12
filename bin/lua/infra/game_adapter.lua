@@ -601,7 +601,7 @@ local original_send_tip
 
 local function quickpatch()
 	if not dynamic_news_manager then
-		local x = nil + 1
+		-- local x = nil + 1
 		return
 	end
 
@@ -609,7 +609,7 @@ local function quickpatch()
 
 
 	if not (dnmClass.PushToChannel) then
-		local x = nil + 1
+		-- local x = nil + 1
 		
 		return false
 	end
