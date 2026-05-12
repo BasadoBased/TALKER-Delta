@@ -1,10 +1,10 @@
-\# TALKER Delta
+# TALKER Delta
 
 Grounding the AI in the game engine. A fork of Coelacanthiform's TALKER-Expanded fork.
 
 
 
-\### Events
+### Events
 
 * Generally an attempt to add more events that make more of the game engine visible to the AI
 * Characters can now view their own inventories
@@ -16,7 +16,7 @@ Grounding the AI in the game engine. A fork of Coelacanthiform's TALKER-Expanded
 
 
 
-\### Prompting
+### Prompting
 
 * General prompting tweaks to the main system prompt. Generally a slimming down of superfluous explanations and some things that threw the AI off.
 * Reworked AI queue system reduces duplicate requests
@@ -27,14 +27,14 @@ Grounding the AI in the game engine. A fork of Coelacanthiform's TALKER-Expanded
 
 
 
-\### Memory
+### Memory
 
 * Memory size can now be tweaked in the MCM.
 * It is much longer by default (900 events vs. 12 in Expanded). This should dramatically improve memory quality for most people. Lower it if token costs are too much or AI gets too slow on old characters. Note the compactification will eventually kick in and replace all 900 with a short summary.
 
 
 
-\### AI Notes
+### AI Notes
 
 At the time of writing, GLM-5.1, Kimi 2.6 and Deepseek v4 are good cheap/free options (of those, I recommend GLM). All frontier proprietary models (Gemini, Claude, GPT) are also good (of those, I recommend Claude). For best results use the most recent model that you can.
 
