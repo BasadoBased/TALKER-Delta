@@ -6,6 +6,7 @@ local event_store = require("domain.repo.event_store")
 local personality_store = require("domain.repo.personalities")
 local backstories_store = require("domain.repo.backstories")
 local log = require("framework.logger")
+local logger = log
 
 -- Save the data
 function save_state(saved_data)
@@ -36,6 +37,9 @@ function load_state(saved_data)
     end
 end
 
+
+
+
 --------------------------------------------------------------------------------
 -- callbacks
 --------------------------------------------------------------------------------
@@ -44,6 +48,8 @@ function on_game_start()
     RegisterScriptCallback("load_state", load_state)
     log.clean_log_files()
 end
+
+
 
 return {
     save_state,

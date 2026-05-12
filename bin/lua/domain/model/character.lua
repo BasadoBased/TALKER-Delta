@@ -6,7 +6,7 @@ local log = require("framework.logger")
 -- Character class definition
 Character = {}
 
-function Character.new(game_id, name, experience, faction, reputation, weapon, visual_faction, weapon_status)
+function Character.new(game_id, name, experience, faction, reputation, weapon, visual_faction, weapon_status, game_obj)
 	new_char = {
 		game_id = game_id,
 		name = name,
@@ -16,11 +16,15 @@ function Character.new(game_id, name, experience, faction, reputation, weapon, v
 		weapon = weapon,
 		visual_faction = visual_faction,
 		weapon_status = weapon_status,
+		game_obj = game_obj
 	}
 	new_char.backstory = backstories.get_backstory(new_char)
 	new_char.personality = personalities.get_personality(new_char)
+	new_char.health = game_obj.health -- patch for that one injury thing 
 	return new_char
 end
+
+
 
 function Character.set_backstory(character, backstory)
 	character.backstory = backstory

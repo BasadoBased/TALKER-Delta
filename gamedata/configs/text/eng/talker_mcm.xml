@@ -168,6 +168,12 @@
     <string id="ui_mcm_talker_time_gap">
         <text>Time gap threshold (hours). If this amount of time has passed between two events, a 'time gap' event is injected to help the AI understand the passage of time.</text>
     </string>
+    <string id="ui_mcm_talker_precise_time">
+        <text>Precise time output: when enabled, time is described using exact date/time (for example, "November 19 at 22:34").</text>
+    </string>
+    <string id="ui_mcm_talker_show_player_injury_status">
+        <text>Show player injury status in event descriptions (e.g. "right arm injury") Some AI may over-focus on it.</text>
+    </string>
     <string id="ui_mcm_talker_base_dialogue_chance">
         <text>Base dialogue chance for unimportant events (important events such as the player speaking always generate dialogue)</text>
     </string>
@@ -176,6 +182,9 @@
     </string>
     <string id="ui_mcm_talker_npc_speak_distance">
         <text>NPCs within this distance can speak to the player (meters)</text>
+    </string>
+    <string id="ui_mcm_talker_memory_size">
+        <text>The number of recent events the AI will retain before compressing narrative memory.</text>
     </string>
     <!-- TRIGGERS -->
     <string id="ui_mcm_talker_instructions_title">
@@ -242,7 +251,7 @@
         <text>Artifact Pickup Trigger Cooldown (seconds)</text>
     </string>
     <string id="ui_mcm_talker_enable_trigger_artifact_use">
-        <text>Event handling for using an artifact</text>
+        <text>Event handling for using any item</text>
     </string>
     <string id="ui_mcm_lst_artifact_use_On">
         <text>On</text>
@@ -254,7 +263,7 @@
         <text>Silent</text>
     </string>
     <string id="ui_mcm_talker_artifact_use_comment_cd">
-        <text>Artifact Use Trigger Cooldown (seconds)</text>
+        <text>Item Use Trigger Cooldown (seconds)</text>
     </string>
 	    <string id="ui_mcm_talker_enable_trigger_artifact_equip">
         <text>Event handling for equipping an artifact</text>
@@ -271,11 +280,32 @@
     <string id="ui_mcm_talker_artifact_equip_comment_cd">
         <text>Cooldown between comments about equipping artifacts (seconds).</text>
     </string>
+    <string id="ui_mcm_talker_trigger_buy_title">
+        <text>Trader Trade</text>
+    </string>
+    <string id="ui_mcm_talker_enable_trigger_buy">
+        <text>Event handling for buying or selling items from traders</text>
+    </string>
+    <string id="ui_mcm_lst_buy_On">
+        <text>On</text>
+    </string>
+    <string id="ui_mcm_lst_buy_Off">
+        <text>Off</text>
+    </string>
+    <string id="ui_mcm_lst_buy_Silent">
+        <text>Silent</text>
+    </string>
+    <string id="ui_mcm_talker_buy_comment_cd">
+        <text>Purchase Trigger Cooldown (seconds)</text>
+    </string>
     <string id="ui_mcm_talker_trigger_callout_title">
         <text>Callouts</text>
     </string>
     <string id="ui_mcm_talker_enable_trigger_callout">
         <text>Enable dialogue trigger on spotting an enemy</text>
+    </string>
+    <string id="ui_mcm_talker_companions_no_callouts_taunts">
+        <text>Companions don't make callouts or taunts</text>
     </string>
     <string id="ui_mcm_talker_callout_cooldown">
         <text>Callout Trigger Cooldown (seconds)</text>
@@ -356,10 +386,10 @@
         <text>Percentage chance to ask the player a question instead of starting idle conversation</text>
     </string>
     <string id="ui_mcm_talker_trigger_injury_title">
-        <text>Injuries</text>
+        <text>Critical hit/injury events</text>
     </string>
     <string id="ui_mcm_talker_enable_trigger_injury">
-        <text>Event handling for player being critically injured.</text>
+        <text>Event handling for hit events on all characters. Helps the AI get a better understanding of combat. High cooldowns and silent mode advised. Cooldown cancels duplicate injury/hit events before dialogue is requested.</text>
     </string>
     <string id="ui_mcm_talker_injury_threshold">
         <text>Percentage of health at which an injury is considered critical</text>

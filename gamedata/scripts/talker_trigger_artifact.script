@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------------------------------------
--- Artifact use and pick-ups
+-- Item use and artifact pick-ups
 ----------------------------------------------------------------------------------------------------
 
 package.path = package.path .. ";./bin/lua/?.lua;"
@@ -13,11 +13,9 @@ local mcm = talker_mcm
 ----------------------------------------------------------------------------------------------------
 -- Constants
 ----------------------------------------------------------------------------------------------------
-local ARTIFACT_PICKUP_COMMENT_CD = mcm.get("artifact_pickup_comment_cd") * 1000
 local ARTIFACT_USE_COMMENT_CD = mcm.get("artifact_use_comment_cd") * 1000
 local ARTIFACT_EQUIP_COMMENT_CD = mcm.get("artifact_equip_comment_cd") * 1000
 
-local mode_pickup = tonumber(mcm.get("enable_trigger_artifact_pickup") or "0")
 local mode_use = tonumber(mcm.get("enable_trigger_artifact_use") or "0")
 local mode_equip = tonumber(mcm.get("enable_trigger_artifact_equip") or "0")
 local ANTI_SPAM_CD = mcm.get("anti_spam_cd") * 1000
@@ -26,6 +24,30 @@ local LOAD_SAFE = false
 ----------------------------------------------------------------------------------------------------
 -- Conditions
 ----------------------------------------------------------------------------------------------------
+
+local function is_dummy_no_sound_item(item)
+    if not item then
+        return false
+    end
+
+    local section = item:section()
+    if section and string.find(string.lower(section), "dummy no sound", 1, true) then
+        return true
+    end
+
+    local label = queries.load_xml(section)
+    if label and string.find(string.lower(label), "dummy no sound", 1, true) then
+        return true
+    end
+
+    label = queries.get_item_name(item)
+    if label and string.find(string.lower(label), "dummy no sound", 1, true) then
+        return true
+    end
+
+    return false
+end
+
 local function is_excluded_artifact(name)
     if not name then return false end
     local lower_name = string.lower(name)
@@ -35,24 +57,21 @@ local function is_excluded_artifact(name)
     return false
 end
 
-local LAST_ARTIFACT_PICKUP_COMMENT = 0
+-- Artifact pickup events are disabled because looting handles them. Artifact use remains configurable as item use.
 local LAST_ARTIFACT_USE_COMMENT = 0
 local LAST_ARTIFACT_EQUIP_COMMENT = 0
 
-local LAST_ARTIFACT_PICKUP_SPAM = 0
 local LAST_ARTIFACT_USE_SPAM = 0
 local LAST_ARTIFACT_EQUIP_SPAM = 0
 
 -- Helper to determine if an artifact event should be silent
 -- Mode: 0 = On, 1 = Off, 2 = Silent
--- Trigger types: 1 = pickup, 2 = use, 3 = equip
+-- Trigger types: 2 = use, 3 = equip
 local function get_silence_status(mode, trigger_type)
     local current_time = queries.get_game_time_ms()
     local cooldown, last_time, last_spam
     
-    if trigger_type == 1 then
-        cooldown, last_time, last_spam = ARTIFACT_PICKUP_COMMENT_CD, LAST_ARTIFACT_PICKUP_COMMENT, LAST_ARTIFACT_PICKUP_SPAM
-    elseif trigger_type == 2 then
+    if trigger_type == 2 then
         cooldown, last_time, last_spam = ARTIFACT_USE_COMMENT_CD, LAST_ARTIFACT_USE_COMMENT, LAST_ARTIFACT_USE_SPAM
     else
         cooldown, last_time, last_spam = ARTIFACT_EQUIP_COMMENT_CD, LAST_ARTIFACT_EQUIP_COMMENT, LAST_ARTIFACT_EQUIP_SPAM
@@ -64,8 +83,7 @@ local function get_silence_status(mode, trigger_type)
     end
 
     -- Update anti-spam timer
-    if trigger_type == 1 then LAST_ARTIFACT_PICKUP_SPAM = current_time 
-    elseif trigger_type == 2 then LAST_ARTIFACT_USE_SPAM = current_time 
+    if trigger_type == 2 then LAST_ARTIFACT_USE_SPAM = current_time 
     else LAST_ARTIFACT_EQUIP_SPAM = current_time end
 
     -- 2. Dialogue Cooldown check
@@ -74,8 +92,7 @@ local function get_silence_status(mode, trigger_type)
     if mode == 0 then -- Mode: On
         if dialogue_ready then
             -- Reset the dialogue cooldown timer
-            if trigger_type == 1 then LAST_ARTIFACT_PICKUP_COMMENT = current_time 
-            elseif trigger_type == 2 then LAST_ARTIFACT_USE_COMMENT = current_time 
+            if trigger_type == 2 then LAST_ARTIFACT_USE_COMMENT = current_time 
             else LAST_ARTIFACT_EQUIP_COMMENT = current_time end
             return false -- Dialogue requested
         else
@@ -95,15 +112,15 @@ end
 
 local function actor_on_item_use(obj, str)
     if not LOAD_SAFE or mode_use == 1 then return end
-    if not queries.is_artifact(obj) then return end
     
     local section = obj:section()
-    local artifact_description = queries.load_xml(section)
-    if artifact_description == "" then
-        artifact_description = queries.get_item_name(obj)
+    local item_description = queries.load_xml(section)
+    if item_description == "" then
+        item_description = queries.get_item_name(obj)
     end
 
-    if is_excluded_artifact(artifact_description) then return end
+    if is_dummy_no_sound_item(obj) then return end
+
 
     local is_silent = get_silence_status(mode_use, 2)
     if is_silent == nil then return end
@@ -112,11 +129,14 @@ local function actor_on_item_use(obj, str)
     local witnesses = game.get_characters_near_player()
     
     local player_fmt, player_vals = queries.get_character_event_info(player)
-    local unformatted_description = player_fmt .. " used " .. artifact_description
+    local unformatted_description = player_fmt .. " used " .. item_description
     
-    trigger.talker_game_event(unformatted_description, player_vals, witnesses, true, { is_artifact = true, is_silent = is_silent })
+    -- Prevent the next artifact pickup event from also triggering a looting comment.
+    talker_trigger_extra.muteNextPickup = true
+
+    trigger.talker_game_event(unformatted_description, player_vals, witnesses, true, {is_artifact = true, is_silent = is_silent })
     if is_silent == true then
-        logger.info("TALKER: Artifact event registered (silent)")
+        logger.info("TALKER: Item use event registered (silent)")
     end
 end
 
@@ -124,6 +144,9 @@ local function actor_item_to_belt(obj)
     if not LOAD_SAFE or mode_equip == 1 then return end
     if not queries.is_artifact(obj) then return end
     
+    if is_dummy_no_sound_item(obj) then return end
+
+
     local section = obj:section()
     local artifact_description = queries.load_xml(section)
     if artifact_description == "" then
@@ -158,6 +181,8 @@ local function actor_on_item_to_slot(obj)
     end
 
     if is_excluded_artifact(artifact_description) then return end
+    if is_dummy_no_sound_item(obj) then return end
+
 
     local is_silent = get_silence_status(mode_equip, 3)
     if is_silent == nil then return end
@@ -174,33 +199,27 @@ local function actor_on_item_to_slot(obj)
     end
 end
 
+
+
 local function actor_on_item_before_pickup(obj)
     if not LOAD_SAFE or mode_pickup == 1 then return end
     if not queries.is_artifact(obj) then return end
 
     local section = obj:section()
     local artifact_description = queries.load_xml(section)
+
     
     -- If load_xml returns an empty string, fall back to the basic item name
     if artifact_description == "" then
         artifact_description = queries.get_item_name(obj)
     end
-    
+
+    if is_dummy_no_sound_item(obj) then return end
     if is_excluded_artifact(artifact_description) then return end
 
-    local is_silent = get_silence_status(mode_pickup, 1)
-    if is_silent == nil then return end
-
-    local player = game.get_player_character()
-    local witnesses = game.get_characters_near_player()
-    
-    local player_fmt, player_vals = queries.get_character_event_info(player)
-    local unformatted_description = player_fmt .. " picked up " .. artifact_description
-    
-    trigger.talker_game_event(unformatted_description, player_vals, witnesses, true, { is_artifact = true, is_silent = is_silent })
-    if is_silent == true then
-        logger.info("TALKER: Artifact event registered (silent)")
-    end
+    -- Artifact pickup handling is intentionally disabled because looting already handles artifact pickups.
+    -- Keeping this hook unregistered prevents duplicate artifact pickup events.
+    return
 end
 
 
@@ -221,7 +240,6 @@ end
 
 function on_game_start()
     RegisterScriptCallback("on_loading_screen_dismissed", on_loading_screen_dismissed)
-    commands.RegisterSafeScriptCallback("actor_on_item_before_pickup", actor_on_item_before_pickup)
     commands.RegisterSafeScriptCallback("actor_on_item_use", actor_on_item_use)
     commands.RegisterSafeScriptCallback("actor_on_item_to_slot", actor_on_item_to_slot)
     commands.RegisterSafeScriptCallback("actor_item_to_belt", actor_item_to_belt)

@@ -16,9 +16,10 @@ function talker_on_player_whispers(dialogue)
     -- Validate that companions are present
     if #companions == 0 then
         -- Display error to player
-        logger.error("TALKER Error: whisper failed, no companions are present")
-        return
-    end
+       logger.error("TALKER Error: whisper failed, no companions are present")
+       return
+
+   end
     
     -- Get player character
     local player = game.get_player_character()

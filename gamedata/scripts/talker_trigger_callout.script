@@ -41,7 +41,11 @@ function is_valid_callout(npc_obj, target_obj)
         return false
     end
 
-    -- Companion check
+    -- Companion check - block if MCM option is set
+    if mcm.get("companions_no_callouts_taunts") and queries.is_companion(npc_obj) then
+        return false
+    end
+
     if queries.is_companion(npc_obj) and not queries.are_enemies(db.actor, target_obj) then
         return false
     end

@@ -1,5 +1,6 @@
 package.path = package.path .. ";./bin/lua/?.lua;"
 local logger = require("framework.logger")
+local Event = require("domain.model.event")
 
 -- Define the EventStore class
 local EventStore = {
@@ -73,6 +74,55 @@ function EventStore:store_event(event)
 		local insert_pos = binary_search(self.sorted_keys, game_time_ms)
 		table.insert(self.sorted_keys, insert_pos, game_time_ms)
 	end
+end
+
+
+local function get_game_time_ms()
+    local query = rawget(_G, "talker_game_queries")
+    if query and type(query.get_game_time_ms) == "function" then
+        return query.get_game_time_ms()
+    end
+
+    local game_global = rawget(_G, "game")
+    if game_global and type(game_global.get_game_time_ms) == "function" then
+        return game_global.get_game_time_ms()
+    end
+
+    return 0
+end
+
+local function get_world_context()
+    local query = rawget(_G, "talker_game_queries")
+    if query and type(query.describe_world) == "function" then
+        return query.describe_world()
+    end
+
+    local game_global = rawget(_G, "game")
+    if game_global and type(game_global.describe_world) == "function" then
+        return game_global.describe_world()
+    end
+
+    return nil
+end
+
+function EventStore:store_news(community, news)
+	if type(news) ~= "table" then
+		logger.error("EventStore:store_news expected news table, got " .. type(news))
+		return
+	end
+	logger.debug("Storing news: %s", community or "Unnamed news")
+
+
+	local game_time_ms = news.game_time_ms or get_game_time_ms()
+	local world_context = "A PDA message."
+	local event = Event.from_news(news, community, game_time_ms, world_context)
+
+	if not event then
+		logger.error("EventStore:store_news failed to build event from news")
+		return
+	end
+
+	self:store_event(event)
 end
 
 -- Method to retrieve an event by game_time_ms

@@ -1,0 +1,173 @@
+﻿package.path = package.path .. ";./bin/lua/?.lua;"
+local game = require("infra.game_adapter")
+local trigger = require("interface.trigger")
+local logger = require("framework.logger")
+local commands = talker_game_commands
+local queries = talker_game_queries
+local mcm = talker_mcm
+
+local ANTI_SPAM_CD = (mcm.get("anti_spam_cd") or 10) * 1000
+local LOAD_SAFE = true
+
+local LAST_LOOTING_COMMENT = 0
+local LAST_LOOTING_SPAM = 0
+
+local function get_looting_mode()
+    return tonumber(mcm.get("enable_trigger_looting") or "0")
+end
+
+local function get_silence_status()
+    local mode = get_looting_mode()
+    if mode == 1 then
+        return nil
+    end
+
+    local current_time = queries.get_game_time_ms()
+    if (current_time - LAST_LOOTING_SPAM) < ANTI_SPAM_CD then
+        return nil
+    end
+
+    LAST_LOOTING_SPAM = current_time
+
+    local cooldown = (mcm.get("looting_comment_cd") or 40) * 1000
+    local dialogue_ready = (current_time - LAST_LOOTING_COMMENT) >= cooldown
+
+    if mode == 0 then
+        if dialogue_ready then
+            LAST_LOOTING_COMMENT = current_time
+            return false
+        end
+        return true
+    elseif mode == 2 then
+        return true
+    end
+
+    return nil
+end
+
+local function get_item_label(item)
+    if not item then
+        return "unknown item"
+    end
+    local section = item:section()
+    local label = queries.load_xml(section)
+    if not label or label == "" then
+        label = queries.get_item_name(item)
+    end
+    if not label or label == "" then
+        label = section or "unknown item"
+    end
+    return label
+end
+
+local function get_container_label(container)
+    if not container then
+        return "container"
+    end
+    local section = container:section()
+    local label = queries.load_xml(section)
+    if not label or label == "" then
+        label = queries.get_item_name(container)
+    end
+    if not label or label == "" then
+        label = section or "container"
+    end
+    return label
+end
+
+local function register_looting_event(actor, action_description, item, container_phrase)
+    -- local err = 2 .. nil
+    if not LOAD_SAFE then
+        return
+    end
+
+    local is_silent = get_silence_status()
+    if is_silent == nil then
+        return
+    end
+
+    if not item then
+        return
+    end
+
+    local actor_fmt, actor_vals = queries.get_character_event_info(actor)
+    local actor_text = string.format(actor_fmt, table.unpack(actor_vals or {}))
+    local item_label = get_item_label(item)
+    local description = actor_text .. " " .. action_description .. " " .. item_label
+    if container_phrase and container_phrase ~= "" then
+        description = description .. " " .. container_phrase
+    end
+
+    local involved_objects = { item }
+    if not queries.is_player(actor) then
+        table.insert(involved_objects, 1, actor)
+    end
+    if container_phrase and container_phrase ~= "" then
+        if type(container_phrase) == "table" and container_phrase.game_id then
+            table.insert(involved_objects, container_phrase)
+        end
+    end
+
+    local witnesses = game.get_characters_near_player()
+    trigger.talker_game_event(description, involved_objects, witnesses, true, { is_artifact = true, is_silent = is_silent })
+
+    if is_silent == true then
+        logger.info("TALKER: Looting event registered (silent)")
+    end
+end
+
+local function actor_on_item_take(item)
+    register_looting_event(game.get_player_character(), "picked up", item)
+end
+
+local function actor_on_item_take_from_box(item, box)
+    local container_phrase = "from " .. get_container_label(box)
+    register_looting_event(game.get_player_character(), "took", item, container_phrase)
+end
+
+local function actor_on_item_put_in_box(item, box)
+    local container_phrase = "into " .. get_container_label(box)
+    register_looting_event(game.get_player_character(), "put", item, container_phrase)
+end
+
+local function actor_on_item_drop(item)
+    register_looting_event(game.get_player_character(), "dropped", item)
+end
+
+local function npc_on_item_take(item, npc)
+    register_looting_event(npc, "took", item)
+end
+
+local function npc_on_item_take_from_box(item, npc, box)
+    local container_phrase = "from " .. get_container_label(box)
+    register_looting_event(npc, "took", item, container_phrase)
+end
+
+local function npc_on_item_drop(item, npc)
+    register_looting_event(npc, "dropped", item)
+end
+
+local function on_loading_screen_dismissed()
+    CreateTimeEvent("talker_looting_load", "safe_enable", 3, function()
+        LOAD_SAFE = true
+        logger.info("Looting triggers are now LOAD_SAFE and active.")
+        return true
+    end)
+end
+
+function on_game_start()
+    RegisterScriptCallback("on_loading_screen_dismissed", on_loading_screen_dismissed)
+    -- commands.RegisterSafeScriptCallback("actor_on_item_take", actor_on_item_take)
+    -- commands.RegisterSafeScriptCallback("actor_on_item_take_from_box", actor_on_item_take_from_box)
+    -- commands.RegisterSafeScriptCallback("actor_on_item_put_in_box", actor_on_item_put_in_box)
+    -- commands.RegisterSafeScriptCallback("actor_on_item_drop", actor_on_item_drop)
+    -- commands.RegisterSafeScriptCallback("npc_on_item_take", npc_on_item_take)
+    -- commands.RegisterSafeScriptCallback("npc_on_item_take_from_box", npc_on_item_take_from_box)
+    -- commands.RegisterSafeScriptCallback("npc_on_item_drop", npc_on_item_drop)
+
+
+end
+
+function is_loaded()
+    return true
+end

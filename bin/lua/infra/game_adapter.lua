@@ -24,7 +24,13 @@ local m = {}
 ------------------------------------------------------------
 
 function m.get_characters_near(obj, distance)
+	
 	local nearby_character_objs = query.get_nearby_characters(obj, distance)
+	return gameObj_to_characters(nearby_character_objs)
+end
+
+function m.get_characters_near_even_dead(obj, distance)
+	local nearby_character_objs = query.get_nearby_characters_even_dead(obj, distance)
 	return gameObj_to_characters(nearby_character_objs)
 end
 
@@ -144,7 +150,8 @@ function m.create_character(game_object_person)
 		reputation_tier,
 		weapon_description,
 		visual_faction,
-		weapon_status
+		weapon_status,
+		game_object_person
 	)
 end
 
@@ -184,8 +191,12 @@ function m.create_dialogue_event(speaker_id, dialogue, source_event)
 		flags.is_whisper = true
 		flags.is_dialogue = true
 		flags.speaker_id = tostring(speaker_id) -- record who spoke for double-trigger prevention
+		
+
 		witnesses = m.get_companions()
+
 		log.debug("Creating whisper dialogue event with companion-only witnesses")
+		
 	else
 		flags.is_dialogue = true
 		flags.speaker_id = tostring(speaker_id) -- record who spoke for double-trigger prevention
@@ -249,30 +260,30 @@ end
 
 function m.get_technical_faction_name(display_name)
 	local faction_map = {
-		["Mercenaries"] = "killer",
-		["Mercs"] = "killer",
-		["Mercenary"] = "killer",
-		["Duty"] = "dolg",
-		["Freedom"] = "freedom",
-		["Bandit"] = "bandit",
-		["Monolith"] = "monolith",
-		["Loner"] = "stalker",
+		["mercenaries"] = "killer",
+		["mercs"] = "killer",
+		["mercenary"] = "killer",
+		["duty"] = "dolg",
+		["freedom"] = "freedom",
+		["bandit"] = "bandit",
+		["monolith"] = "monolith",
+		["loner"] = "stalker",
 		["stalker"] = "stalker",
-		["Clear Sky"] = "csky",
+		["clear sky"] = "csky",
 		["scientist"] = "ecolog",
 		["egghead"] = "ecolog",
-		["Ecolog"] = "ecolog",
-		["Military"] = "army",
-		["Army"] = "army",
-		["Renegade"] = "renegade",
-		["Trader"] = "trader",
-		["Sin"] = "greh",
-		["UNISG"] = "isg",
-		["ISG"] = "isg",
-		["Zombie"] = "zombied",
-		["Zombied"] = "zombied",
+		["ecolog"] = "ecolog",
+		["military"] = "army",
+		["army"] = "army",
+		["renegade"] = "renegade",
+		["trader"] = "trader",
+		["sin"] = "greh",
+		["unisg"] = "isg",
+		["isg"] = "isg",
+		["zombie"] = "zombied",
+		["zombied"] = "zombied",
 	}
-	return faction_map[display_name] or display_name:lower()
+	return faction_map[display_name] or faction_map[display_name:lower()] or display_name:lower()
 end
 
 function m.get_player_goodwill_tier(faction_display_name)
@@ -573,8 +584,97 @@ if false and is_test_env then
 	return mock_game_adapter
 end
 
+
 function m.is_mock()
 	return false
 end
+
+
+
+------------------------------------------
+local event_store = require("domain.repo.event_store")
+
+local dynamic_news_manager_push_to_channel_patched = false
+local original_dynamic_news_manager_push_to_channel
+local original_send_tip
+
+
+local function quickpatch()
+	if not dynamic_news_manager then
+		local x = nil + 1
+		return
+	end
+
+	local dnmClass = dynamic_news_manager.DynamicNewsManager
+
+
+	if not (dnmClass.PushToChannel) then
+		local x = nil + 1
+		
+		return false
+	end
+	
+	original_dynamic_news_manager_push_to_channel = dnmClass.PushToChannel
+   dnmClass.PushToChannel = function(self, name, t, fifo)
+        log.info("Calling into patched PushToChannel for news: %s ", name)
+
+        local result = original_dynamic_news_manager_push_to_channel(self, name, t, fifo)
+        event_store:store_news(name, t)
+   
+        return result
+    end
+
+
+
+
+
+	local tip_whitelist = {"Looking for an experienced stalker who can lead me"}
+
+	local function tip_text_matches_whitelist(text)
+		if not text then
+			return false
+		end
+
+		for _, pattern in ipairs(tip_whitelist) do
+			if text:lower():find(pattern:lower(), 1, true) then
+				return true
+			end
+		end
+
+		return false
+	end
+
+	-- original_send_tip = news_manager.send_tip
+	-- if not original_send_tip then
+	-- 	local x = nil + 1
+	-- 	return
+	-- end
+	-- news_manager.send_tip = function(player,  tip_text, idk, npc, ...)
+	-- 	log.info("Intercepted notification")
+	-- 	if tip_text_matches_whitelist(tip_text) then
+	-- 		local fake_news = {
+	-- 			Se = query.get_name(npc),
+	-- 			Mg = tip_text,
+	-- 		}
+	-- 		log.info("Rerouting SendTip into store_news for tip: %s", tip_text .. fake_news.Se)
+	-- 		event_store:store_news("escort", fake_news)
+	-- 	end
+
+	-- 	return original_send_tip(player, tip_text, idk, npc, ...)
+	-- end
+
+
+
+
+
+	log.info("Patched and ready")
+	-- local nlllll = 1+ nil
+
+end 
+	log.info("Going patched")
+
+--ensure_dynamic_news_manager_patched()
+quickpatch()
+
 
 return m

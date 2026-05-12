@@ -248,6 +248,16 @@ function AI_request.pick_speaker(recent_events, compress_memories)
 				table.insert(combined_events_list, new_events_context[i])
 			end
 		end
+
+		-- insert all that the speaker spoke. 
+		for i = #recent_events, 1, -1 do
+			local event = recent_events[i]
+			local speaker_id = extract_speaker_id(event)
+			if speaker_id and tostring(speaker_id) == tostring(context_speaker_id) then
+				table.insert(combined_events_list, event) -- insert at the beginning to maintain order
+			end
+		end
+
 	end
 
 	-- Fallback: If no context speaker or no events found, usage original recent_events
@@ -605,70 +615,17 @@ end
 AI_request.compress_memories = AI_request.update_narrative
 
 -- Main function - uses memories and events for context to produce dialogue
+-- Now uses the OrderManager system for queue control (one active request per speaker_id)
 function AI_request.request_dialogue(speaker_id, callback)
-	logger.info("AI_request.request_dialogue")
-	logger.info("AI_request.request_dialogue")
-	local memory_context = memory_store:get_memory_context(speaker_id)
+	logger.info("AI_request.request_dialogue called for speaker: " .. speaker_id)
 
-	-- Inject time gap if applicable
-	local current_game_time = query and query.get_game_time_ms() or 0
-	memory_context.new_events = transformations.inject_time_gaps(
-		memory_context.new_events,
-		memory_context.last_update_time_ms,
-		current_game_time
-	)
+	-- Import the OrderManager
+	local order_manager = require("infra.AI.orders")
 
-	-- SLICING OPTIMIZATION (Parallel Execution Logic)
-	-- If there are too many new events (e.g. during migration), we only show the MOST RECENT ones to the dialogue prompt.
-	-- This prevents the prompt from exploding with 100+ events while the background compression is still running.
-	local MAX_DIALOGUE_EVENTS = 12
-	if #memory_context.new_events > MAX_DIALOGUE_EVENTS then
-		logger.info(
-			"Too many new events for dialogue context ("
-				.. #memory_context.new_events
-				.. "). Slicing to last "
-				.. MAX_DIALOGUE_EVENTS
-		)
-		local sliced_events = {}
-		local start_index = #memory_context.new_events - MAX_DIALOGUE_EVENTS + 1
-		for i = start_index, #memory_context.new_events do
-			table.insert(sliced_events, memory_context.new_events[i])
-		end
-		memory_context.new_events = sliced_events
-	end
-
-	-- Safety check
-	if (not memory_context.new_events or #memory_context.new_events == 0) and not memory_context.narrative then
-		logger.info("Requesting dialogue with absolutely no context (no narrative, no events).")
-	end
-
-	local speaker_character = AI_request.get_character_by_id(speaker_id, memory_context.new_events)
-	local messages, timestamp_to_delete =
-		prompt_builder.create_dialogue_request_prompt(speaker_character, memory_context)
-
-	-- Normalizing messages for Gemini disabled, for now. Monitoring results.
-	-- if config.is_gemini() then
-	-- 	messages = normalizer.normalize(messages)
-	-- end
-
-	-- call the model to generate the dialogue
-	return model().generate_dialogue(messages, function(generated_dialogue)
-		-- when it responds...
-		if generated_dialogue == nil then
-			logger.error("Error generating dialogue")
-			return
-		end
-
-		-- Validate response against policy/junk filters
-		if not dialogue_cleaner.was_response_valid(generated_dialogue) then
-			logger.warn("AI response rejected by validation filter: " .. tostring(generated_dialogue))
-			return
-		end
-
-		logger.info("Received dialogue: " .. generated_dialogue)
-		generated_dialogue = dialogue_cleaner.improve_response_text(generated_dialogue) -- remove censorship and other unwanted content
-		callback(generated_dialogue, timestamp_to_delete)
-	end)
+	-- Delegate to the OrderManager which handles:
+	-- - Queue management (one active request per speaker_id)
+	-- - Automatic queue processing
+	return order_manager.get_manager():add_order(speaker_id, callback)
 end
 
 ------------------------------------------------------------------------------------------

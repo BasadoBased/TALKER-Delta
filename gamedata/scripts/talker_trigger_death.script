@@ -94,7 +94,8 @@ function on_creature_death(victim_obj, killer_obj)
 
     if killer and killer.name ~= victim.name then   
         local killer_fmt, killer_vals = queries.get_character_event_info(killer)
-        local unformatted_description = victim_fmt .. " was killed by " .. killer_fmt .. "!"
+        local unformatted_description = victim_fmt .. " was killed by " .. killer_fmt .. "!" 
+        -- local unformatted_description = killer_fmt .. " killed " .. victim_fmt .. "!"
         local values = queries.join_tables(victim_vals, killer_vals)
         trigger.talker_game_event(unformatted_description, values, witnesses, important_event, flags)
     else

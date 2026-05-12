@@ -36,16 +36,20 @@ function transformation.pick_potential_speakers(recent_events)
 end
 
 ------------------------------------------------------------------------------------------------------
--- Constants for memory management
+-- Memory management helpers
 ------------------------------------------------------------------------------------------------------
-transformation.COMPRESSION_THRESHOLD = 12
+local function get_memory_size()
+	return tonumber(mcm.get("memory_size")) or 900
+end
+
+transformation.COMPRESSION_THRESHOLD = get_memory_size()
 
 ------------------------------------------------------------------------------------------------------
 function transformation.should_update_narrative(new_events)
 	if not new_events then
 		return false
 	end
-	return #new_events >= transformation.COMPRESSION_THRESHOLD
+	return #new_events >= get_memory_size()
 end
 
 function transformation.inject_time_gaps(events, last_update_time, current_game_time)

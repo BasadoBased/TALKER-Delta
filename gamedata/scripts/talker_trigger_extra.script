@@ -1,0 +1,566 @@
+package.path = package.path .. ";./bin/lua/?.lua;"
+local game = require("infra.game_adapter")
+local trigger = require("interface.trigger")
+local log = require("framework.logger")
+local queries = talker_game_queries
+local mcm = talker_mcm
+
+local LAST_BUY_TIME_MS = 0
+local TRADE_INVENTORY_SNAPSHOT = nil
+muteNextPickup = false
+
+local LOAD_SAFE = false
+
+local BLACKLISTED_ITEM_STRINGS = {
+    "dummy no sound",
+    "old ",
+    "rouble"
+}
+
+local function is_blacklisted_item(item)
+    if not item then
+        return false
+    end
+
+    local section = item:section()
+    local section_lower = section and string.lower(section)
+    for _, blacklisted in ipairs(BLACKLISTED_ITEM_STRINGS) do
+        if section_lower and string.find(section_lower, blacklisted, 1, true) then
+            return true
+        end
+
+        local label = queries.load_xml(section)
+        if label and string.find(string.lower(label), blacklisted, 1, true) then
+            return true
+        end
+
+        label = queries.get_item_name(item)
+        if label and string.find(string.lower(label), blacklisted, 1, true) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function get_silence_status_buy()
+    local mode = tonumber(mcm.get("enable_trigger_buy") or "0")
+    if mode == 2 then
+        return true
+    end
+
+    local cooldown = (mcm.get("buy_comment_cd") or 40) * 1000
+    local current_time = queries.get_game_time_ms()
+    if (current_time - LAST_BUY_TIME_MS) < cooldown then
+        return true
+    end
+
+    LAST_BUY_TIME_MS = current_time
+    return false
+end
+
+local function snapshot_player_inventory()
+    local snapshot = {}
+    db.actor:iterate_inventory(function(_, item)
+        if item and not is_blacklisted_item(item) then
+            local section = item:section()
+            snapshot[section] = (snapshot[section] or 0) + 1
+        end
+    end, db.actor)
+    return snapshot
+end
+
+local function get_inventory_diff(before, after)
+    local diff = {}
+
+    for section, count in pairs(after) do
+        diff[section] = count - (before[section] or 0)
+    end
+
+    for section, count in pairs(before) do
+        if after[section] == nil then
+            diff[section] = -count
+        end
+    end
+
+    return diff
+end
+
+
+
+local function format_trade_items(changes)
+    local parts = {}
+    for section, count in pairs(changes) do
+        if count ~= 0 then
+            local name = section
+            if ui_item and ui_item.get_sec_name then
+                local text = ui_item.get_sec_name(section)
+                if text and text ~= "" then
+                    name = text
+                end
+            end
+            local suffix = math.abs(count) > 1 and (" x" .. math.abs(count)) or ""
+            parts[#parts + 1] = name .. suffix
+        end
+    end
+    table.sort(parts)
+    return table.concat(parts, ", ")
+end
+
+local function get_nearest_trader_name()
+    local closest_trader = nil
+    local closest_distance = math.huge
+
+    local nearby_chars = game.get_characters_near_player(3000)
+    for _, candidate in ipairs(nearby_chars) do
+        if candidate.faction == "Trader" and not game.is_player(candidate.game_id) then
+            local dist = game.get_distance_to_player(candidate.game_id)
+            if dist and dist < closest_distance then
+                closest_distance = dist
+                closest_trader = candidate
+            end
+        end
+    end
+
+    if closest_trader and closest_trader.name and closest_trader.name ~= "" then
+        return closest_trader.name
+    end
+    return "trader"
+end
+
+local function create_trade_event(buy_items, sell_items, player)
+    local parts = {}
+    if buy_items and next(buy_items) then
+        parts[#parts + 1] = "bought " .. format_trade_items(buy_items)
+    end
+    if sell_items and next(sell_items) then
+        parts[#parts + 1] = "sold " .. format_trade_items(sell_items)
+    end
+    if #parts == 0 then
+        return nil
+    end
+
+    local player_fmt, player_vals = queries.get_character_event_info(player)
+    local trader_name = get_nearest_trader_name()
+    local description = player_fmt .. " " .. table.concat(parts, " and ") .. " from " .. trader_name .. "!"
+    return description, player_vals
+end
+
+local function build_trade_tables(diff)
+    local buys = {}
+    local sells = {}
+    for section, count in pairs(diff) do
+        if count > 0 then
+            buys[section] = count
+        elseif count < 0 then
+            sells[section] = -count
+        end
+    end
+    return buys, sells
+end
+
+local function on_trade_started()
+    TRADE_INVENTORY_SNAPSHOT = snapshot_player_inventory()
+end
+
+local function on_trade_closed()
+    if not TRADE_INVENTORY_SNAPSHOT then
+        return
+    end
+
+    local after_snapshot = snapshot_player_inventory()
+    local diff = get_inventory_diff(TRADE_INVENTORY_SNAPSHOT, after_snapshot)
+    TRADE_INVENTORY_SNAPSHOT = nil
+
+    local buy_items, sell_items = build_trade_tables(diff)
+    if not next(buy_items) and not next(sell_items) then
+        return
+    end
+
+    local mode = tonumber(mcm.get("enable_trigger_buy") or "0")
+    if mode == 1 then
+        return
+    end
+
+    local player = game.get_player_character()
+    local description, values = create_trade_event(buy_items, sell_items, player)
+    if not description then
+        return
+    end
+
+    local witnesses = game.get_characters_near_player()
+    local is_silent = get_silence_status_buy()
+
+    trigger.talker_game_event(description, values, witnesses, true, {
+        is_buy = next(buy_items) ~= nil,
+        is_sell = next(sell_items) ~= nil,
+        is_trade = true,
+        is_silent = is_silent,
+    })
+
+    muteNextPickup = true
+
+    if is_silent == true then
+        log.info("TALKER: Trade event registered (silent)")
+    end
+end
+
+local function safe_on_trade_started()
+    local status, err = pcall(on_trade_started)
+    if not status then
+        log.error("Error in on_trade_started: " .. tostring(err))
+    end
+end
+
+local function safe_on_trade_closed()
+    local status, err = pcall(on_trade_closed)
+    if not status then
+        log.error("Error in on_trade_closed: " .. tostring(err))
+    end
+end
+
+
+local logger = require("framework.logger")
+local commands = talker_game_commands
+
+
+local ANTI_SPAM_CD = (mcm.get("anti_spam_cd") or 10) * 1000
+
+local LAST_LOOTING_COMMENT = 0
+local LAST_LOOTING_SPAM = 0
+
+local function get_looting_mode()
+    return tonumber(mcm.get("enable_trigger_looting") or "2")
+end
+
+local function get_silence_status_looting()
+    local mode = get_looting_mode()
+    if mode == 1 then
+        return nil
+    end
+
+    local current_time = queries.get_game_time_ms()
+    if (current_time - LAST_BUY_TIME_MS) < 1000 then
+        
+        return nil 
+    end
+    if (current_time - LAST_LOOTING_SPAM) < ANTI_SPAM_CD then
+        return true -- silent
+    end
+
+
+    LAST_LOOTING_SPAM = current_time
+
+    local cooldown = (mcm.get("looting_comment_cd") or 40) * 1000
+    local dialogue_ready = (current_time - LAST_LOOTING_COMMENT) >= cooldown
+
+    if mode == 0 then
+        if dialogue_ready then
+            LAST_LOOTING_COMMENT = current_time
+            return false
+        end
+        return true
+    elseif mode == 2 then
+        return true
+    end
+
+    return nil
+end
+
+local function get_item_label(item)
+    if not item then
+        return "unknown item"
+    end
+    local section = item:section()
+    local label = queries.load_xml(section)
+    if not label or label == "" then
+        label = queries.get_item_name(item)
+    end
+    if not label or label == "" then
+        label = section or "unknown item"
+    end
+    return label
+end
+
+local function get_container_label(container)
+    if not container then
+        return "container"
+    end
+    local section = container:section()
+    local label = queries.load_xml(section)
+    if not label or label == "" then
+        label = queries.get_item_name(container)
+    end
+    if not label or label == "" then
+        label = section or "container"
+    end
+    return label
+end
+
+local LOOTING_COLLECTIONS = {}
+local LOOTING_COLLECTION_TIMEOUT = 5
+
+local function join_looting_phrases(phrases)
+    local count = #phrases
+    if count == 0 then
+        return ""
+    elseif count == 1 then
+        return phrases[1]
+    elseif count == 2 then
+        return phrases[1] .. " and " .. phrases[2]
+    else
+        return table.concat(phrases, ", ", 1, count - 1) .. ", and " .. phrases[count]
+    end
+end
+
+local function build_looting_phrases(groups, order)
+    local phrases = {}
+    for _, group_key in ipairs(order or {}) do
+        local group = groups[group_key]
+        if group then
+            local item_labels = {}
+            for label, count in pairs(group.items) do
+                local item_text = label
+                if count > 1 then
+                    item_text = item_text .. " x" .. count
+                end
+                item_labels[#item_labels + 1] = item_text
+            end
+            table.sort(item_labels)
+
+            local item_phrase = table.concat(item_labels, ", ")
+            local phrase = group.action_description .. " " .. item_phrase
+            if group.container_phrase and group.container_phrase ~= "" then
+                phrase = phrase .. " " .. group.container_phrase
+            end
+            phrases[#phrases + 1] = phrase
+        end
+    end
+    return phrases
+end
+
+local function dedupe_looting_groups(groups, order)
+    local container_item_labels = {}
+    for _, group in pairs(groups) do
+        if group and group.container_phrase and group.container_phrase ~= "" then
+            for label, count in pairs(group.items) do
+                container_item_labels[label] = (container_item_labels[label] or 0) + count
+            end
+        end
+    end
+
+    if not next(container_item_labels) then
+        return groups, order
+    end
+
+    local cleaned_groups = {}
+    local cleaned_order = {}
+    for _, group_key in ipairs(order or {}) do
+        local group = groups[group_key]
+        if group then
+            local cleaned_items = {}
+            for label, count in pairs(group.items) do
+                if group.container_phrase and group.container_phrase ~= "" then
+                    cleaned_items[label] = count
+                elseif not container_item_labels[label] then
+                    cleaned_items[label] = count
+                end
+            end
+
+            if next(cleaned_items) then
+                cleaned_groups[group_key] = {
+                    action_description = group.action_description,
+                    container_phrase = group.container_phrase,
+                    items = cleaned_items,
+                }
+                cleaned_order[#cleaned_order + 1] = group_key
+            end
+        end
+    end
+
+    return cleaned_groups, cleaned_order
+end
+
+local function flush_looting_collection(key, generation)
+    local entry = LOOTING_COLLECTIONS[key]
+    if not entry or entry.generation ~= generation then
+        return true
+    end
+
+    if muteNextPickup then
+        muteNextPickup = false
+        LOOTING_COLLECTIONS[key] = nil
+        return true
+    end
+
+    local actor = entry.actor
+    if not actor then
+        error("No actor for looting")
+    end
+    local actor_fmt, actor_vals = queries.get_character_event_info(actor)
+    local actor_text = string.format(actor_fmt, unpack(actor_vals or {}))
+
+    local cleaned_groups, cleaned_order = dedupe_looting_groups(entry.groups, entry.group_order)
+    local phrase_text = join_looting_phrases(build_looting_phrases(cleaned_groups, cleaned_order))
+    if phrase_text == "" then
+        LOOTING_COLLECTIONS[key] = nil
+        return true
+    end
+
+    local description = actor_text .. " " .. phrase_text
+    local witnesses = game.get_characters_near(actor.game_obj)
+    -- local witnesses = game.get_characters_near_player()
+    local is_silent = get_silence_status_looting()
+
+    LOOTING_COLLECTIONS[key] = nil
+
+    if is_silent == nil then
+        return true
+    end
+
+    trigger.talker_game_event(description, entry.involved_objects, witnesses, true, { is_artifact = true, is_silent = is_silent })
+
+    if is_silent == true then
+        logger.info("TALKER: Looting event registered (silent)")
+    end
+
+    return true
+end
+
+local function schedule_looting_flush(key, entry)
+    entry.generation = (entry.generation or 0) + 1
+    local event_id = "talker_looting_flush_" .. key .. "_" .. tostring(entry.generation)
+    CreateTimeEvent(event_id, "flush_looting", LOOTING_COLLECTION_TIMEOUT, flush_looting_collection, key, entry.generation)
+end
+
+local function queue_looting_event(actor, action_description, item, container_phrase)
+    if not LOAD_SAFE then
+        return
+    end
+
+    if not item or is_blacklisted_item(item) then
+        return
+    end
+
+    if (not actor.game_obj:alive()) then
+        return
+    end
+
+    local key = tostring((actor and actor.game_id) or "unknown_actor")
+    local entry = LOOTING_COLLECTIONS[key]
+    if not entry then
+        entry = {
+            actor = actor,
+            groups = {},
+            group_order = {},
+            involved_objects = {},
+        }
+        if actor and not queries.is_player(actor) then
+            table.insert(entry.involved_objects, actor)
+        end
+        LOOTING_COLLECTIONS[key] = entry
+    end
+
+    local item_label = get_item_label(item)
+    local group_key = action_description .. "|" .. tostring(container_phrase or "")
+    local group = entry.groups[group_key]
+    if not group then
+        group = {
+            action_description = action_description,
+            container_phrase = container_phrase,
+            items = {},
+        }
+        entry.groups[group_key] = group
+        entry.group_order[#entry.group_order + 1] = group_key
+    end
+
+    group.items[item_label] = (group.items[item_label] or 0) + 1
+
+    table.insert(entry.involved_objects, item)
+    if type(container_phrase) == "table" and container_phrase.game_id then
+        table.insert(entry.involved_objects, container_phrase)
+    end
+
+    schedule_looting_flush(key, entry)
+end
+
+local function actor_on_item_take(item)
+    queue_looting_event(game.get_player_character(), "picked up", item)
+end
+
+local function actor_on_item_take_from_box(box, item)
+    -- THESE ARE IN THE RIGHT ORDER DONT FLIP THEM
+    local container_phrase = "from " .. get_container_label(box)
+    queue_looting_event(game.get_player_character(), "took", item, container_phrase)
+end
+
+local function actor_on_item_put_in_box(box, item)
+    -- THESE ARE IN THE RIGHT ORDER DONT FLIP THEM
+
+    local container_phrase = "into " .. get_container_label(box)
+    queue_looting_event(game.get_player_character(), "put", item, container_phrase)
+end
+
+local function actor_on_item_drop(item)
+    queue_looting_event(game.get_player_character(), "put down", item)
+end
+
+local function npc_on_item_take(npc, item)
+    if (not npc) or (not item) then
+        return
+    end
+    logger.debug("A " .. tostring(npc and npc.game_id) .. " took " .. tostring(item and item:section()))
+
+    queue_looting_event(game.create_character(npc), "took", item)
+end
+
+local function npc_on_item_take_from_box(npc, box, item)
+    if (not npc) or (not item) or (not box) then
+        return
+    end
+    local container_phrase = "from " .. get_container_label(box)
+    logger.debug("Box: " .. get_container_label(box))
+    queue_looting_event(game.create_character(npc), "took", item, container_phrase)
+end
+
+local function npc_on_item_drop(npc, item)
+    if (not npc) or (not item) then
+        return
+    end
+    logger.debug("A " .. tostring(npc and npc.game_id) .. " dropped " .. tostring(item and item:section()))
+    queue_looting_event(game.create_character(npc), "dropped", item)
+end
+
+local function on_loading_screen_dismissed()
+    CreateTimeEvent("talker_looting_load", "safe_enable", 3, function()
+        LOAD_SAFE = true
+        logger.info("Looting triggers are now LOAD_SAFE and active.")
+        return true
+    end)
+end
+function on_game_start()
+    RegisterScriptCallback("on_loading_screen_dismissed", on_loading_screen_dismissed)
+
+
+    RegisterScriptCallback("ActorMenu_on_trade_started", safe_on_trade_started)
+    RegisterScriptCallback("ActorMenu_on_trade_closed", safe_on_trade_closed)
+
+    
+
+    RegisterScriptCallback("actor_on_item_take", actor_on_item_take)
+    -- these two double trigger 
+    RegisterScriptCallback("actor_on_item_take_from_box", actor_on_item_take_from_box)
+    RegisterScriptCallback("actor_on_item_put_in_box", actor_on_item_put_in_box)
+    RegisterScriptCallback("actor_on_item_drop", actor_on_item_drop)
+    
+    -- buggy... causes scripting overload?
+    -- RegisterScriptCallback("npc_on_item_take", npc_on_item_take)
+    -- RegisterScriptCallback("npc_on_item_take_from_box", npc_on_item_take_from_box)
+    -- RegisterScriptCallback("npc_on_item_drop", npc_on_item_drop)
+end
+
+function is_loaded()
+    return true
+end
+
+-- Renamed module to talker_trigger_extra and updated the loader registration.

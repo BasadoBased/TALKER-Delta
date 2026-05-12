@@ -7,78 +7,119 @@ local queries = talker_game_queries
 local mcm = talker_mcm
 
 local script_name = "TALKER Trigger Injury"
-local LAST_INJURY_TIME = 0
-local INJURY_COOLDOWN_CD = mcm.get("injury_cooldown") * 1000 -- default 20 seconds cooldown to prevent spam
+local LAST_INJURY_TIME = {}
+local INJURY_COOLDOWN_CD = (tonumber(mcm.get("injury_cooldown")) or 30) * 1000 -- default 30 seconds cooldown to prevent spam
 
 local mode_injury = tonumber(mcm.get("enable_trigger_injury") or "0")
 
+
+local function on_cooldown(entity_id)
+    local current_time = queries.get_game_time_ms()
+    
+    local last_time = LAST_INJURY_TIME[entity_id] or 0
+    if (current_time - last_time) < INJURY_COOLDOWN_CD then
+        return true -- On cooldown, keep event silent for this entity
+    end
+    return false 
+end
+
 -- Helper to determine if an injury event should be silent
 -- Mode: 0 = On, 1 = Off, 2 = Silent
-local function get_silence_status(mode)
+local function get_silence_status(mode, entity_id)
     local current_time = queries.get_game_time_ms()
-    if (current_time - LAST_INJURY_TIME) < INJURY_COOLDOWN_CD then
-        return -- On cooldown, abort
+    if on_cooldown(entity_id) then
+        return true -- On cooldown, keep event silent for this entity
     end
     
-    -- Reset the cooldown timer
-    LAST_INJURY_TIME = current_time
+    -- Reset the cooldown timer for this entity
+    LAST_INJURY_TIME[entity_id] = current_time
     if mode == 2 then return true end -- Silent mode registers the event but doesn't request dialogue
     return false
 end
 
-function actor_on_hit_callback(obj, amount, local_direction, who, bone_index)
+function actor_on_hit_callback(victim_obj, amount, local_direction, who, bone_index)
+
     if mode_injury == 1 then return end
-    
-    local threshold = tonumber(mcm.get("injury_threshold")) or 0.4
-    if not (db.actor and db.actor.health < threshold) then return end
+    if not victim_obj or not victim_obj:alive() then return end
+
+    local victim = game.create_character(victim_obj)
+    if not victim then return end
+
+    local threshold = tonumber(mcm.get("injury_threshold")) or 1
+    if not (victim.health and (victim.health < threshold and victim.health > 0) ) then return end
 
     -- Filter out all listed anomalies AND radiation damage (prevents misattributed combat dialogue)
-    if queries.is_anomaly(who) then return end
     if who then
+        if queries.is_anomaly(who) then return end
         local section = who:section()
         if string.find(section, "radioactive") or string.find(section, "radiation") then
             return
         end
     end
 
-    local player = game.get_player_character()
-    local witnesses = game.get_characters_near_player()
-    local player_fmt, player_vals = queries.get_character_event_info(player)
-    
+
+
+    -- Cooldown now cancels duplicate injury/hit events before any dialogue is requested.
+    -- This applies to all characters, not just the player.
+    if on_cooldown(victim_obj:id()) then
+        logger.info("TALKER: Injury/hit event for %s is on cooldown", victim.name)
+        return
+    end
+
+    local witnesses = game.get_characters_near(victim_obj)
+    if who then
+        witnesses = queries.join_tables(witnesses, game.get_characters_near(who))
+    end
+
+    local victim_fmt, victim_vals = queries.get_character_event_info(victim)
     local unformatted_description = ""
-    local values = {}
-    
-    -- Check for self-damage (grenades, etc.) or environmental damage
-    if who and queries.is_player(who) then
-        -- Self-damage
-        unformatted_description = player_fmt .. " critically injured themselves!"
-        values = player_vals
+    local values = victim_vals
+
+    if who and victim_obj:id() == who:id() then
+        unformatted_description = victim_fmt .. " injured themselves!"
     elseif who then
-        -- Normal combat damage from another entity
         local attacker = game.create_character(who)
         local attacker_fmt, attacker_vals = queries.get_character_event_info(attacker)
-        unformatted_description = player_fmt .. " was critically injured while fighting " .. attacker_fmt .. "!"
-        values = queries.join_tables(player_vals, attacker_vals)
+        unformatted_description = victim_fmt .. " was hit by " .. attacker_fmt .. "!"
+        values = queries.join_tables(victim_vals, attacker_vals)
     else
-        -- Environmental damage (who is nil)
-        unformatted_description = player_fmt .. " was critically injured!"
-        values = player_vals
+        unformatted_description = victim_fmt .. " was injured!"
     end
-    
+
     logger.info("%s: %s", script_name, unformatted_description)
+
     
-    local is_silent = get_silence_status(mode_injury)
+
+    local is_silent = get_silence_status(mode_injury, victim_obj:id())
     trigger.talker_game_event(unformatted_description, values, witnesses, true, { is_injury = true, is_silent = is_silent })
     if is_silent == true then
         logger.info("TALKER: Injury event registered (silent)")
     end
 end
 
-function on_game_start()
-    RegisterScriptCallback("actor_on_hit_callback", actor_on_hit_callback)
+function npc_on_hit_callback(obj, amount, local_direction, who, bone_index)
+    return actor_on_hit_callback(obj, amount, local_direction, who, bone_index)
 end
 
--- Module loaded check
+function actor_on_before_hit(hit, bone_index, flags)
+    if not (hit and hit.draftsman ) then
+        return
+    end
+
+    -- if hit.power == 0 then return end
+    -- if not ( hit.type == 5 or hit.type == 6 or hit.type == 7 or hit.type == 8 ) then return end
+
+    local attacker = hit.draftsman
+    actor_on_hit_callback(queries.get_player(), hit.power or 0, 0, attacker, bone_index or 0)
+end
+
+function on_game_start()
+     RegisterScriptCallback("actor_on_before_hit", actor_on_before_hit)
+    -- RegisterScriptCallback("actor_on_hit_callback", actor_on_hit_callback)
+    RegisterScriptCallback("npc_on_hit_callback", npc_on_hit_callback)
+
+end 
+
 function is_loaded()
     return true
 end

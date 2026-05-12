@@ -38,6 +38,147 @@ local function user_message(content)
 	return { role = "user", content = content }
 end
 
+local function get_item_name_from_query(item)
+	if not item then
+		return nil
+	end
+	local name = nil
+	if query.get_item_name then
+		local ok
+		ok, name = pcall(function()
+			return query.get_item_name(item)
+		end)
+		if ok and name and name ~= "" then
+			return name
+		end
+	end
+	if query.get_item_description then
+		local ok
+		ok, name = pcall(function()
+			return query.get_item_description(item)
+		end)
+		if ok and name and name ~= "" then
+			return name
+		end
+	end
+	if query.get_name then
+		local ok
+		ok, name = pcall(function()
+			return query.get_name(item)
+		end)
+		if ok and name and name ~= "" then
+			return name
+		end
+	end
+	return nil
+end
+
+local function get_item_description_from_query(item)
+	-- doesn't work, don't know how to do this.
+	return nil 
+	-- if not item then
+	-- 	return nil
+	-- end
+	-- local desc = nil
+	-- local item_name = get_item_name_from_query(item)
+	-- local function is_valid_description(candidate)
+	-- 	return candidate and candidate ~= "" and candidate ~= item_name
+	-- end
+
+	-- if query.get_description then
+	-- 	local ok
+	-- 	ok, desc = pcall(function()
+	-- 		return query.get_description(item)
+	-- 	end)
+	-- 	if ok and is_valid_description(desc) then
+	-- 		return desc
+	-- 	end
+	-- end
+	-- if query.get_item_desc then
+	-- 	local ok
+	-- 	ok, desc = pcall(function()
+	-- 		return query.get_item_desc(item)
+	-- 	end)
+	-- 	if ok and is_valid_description(desc) then
+	-- 		return desc
+	-- 	end
+	-- end
+	-- local ui_item = rawget(_G, "ui_item")
+	-- if ui_item then
+	-- 	if ui_item.get_desc then
+	-- 		local ok
+	-- 		ok, desc = pcall(function()
+	-- 			return ui_item.get_desc(item:section())
+	-- 		end)
+	-- 		if ok and is_valid_description(desc) then
+	-- 			return desc
+	-- 		end
+	-- 	end
+	-- 	if ui_item.get_description then
+	-- 		local ok
+	-- 		ok, desc = pcall(function()
+	-- 			return ui_item.get_description(item:section())
+	-- 		end)
+	-- 		if ok and is_valid_description(desc) then
+	-- 			return desc
+	-- 		end
+	-- 	end
+	-- end
+	-- if query.get_item_description then
+	-- 	local ok
+	-- 	ok, desc = pcall(function()
+	-- 		return query.get_item_description(item)
+	-- 	end)
+	-- 	if ok and is_valid_description(desc) then
+	-- 		return desc
+	-- 	end
+	-- end
+	-- return nil
+end
+
+local function get_inventory_label(item)
+	local name = get_item_name_from_query(item)
+	local desc = get_item_description_from_query(item)
+	if name and desc and desc ~= "" and desc ~= name then
+		return name .. " - " .. desc
+	end
+	return name or desc or nil
+end
+
+local function get_inventory_summary(game_object)
+	if not game_object or not game_object.iterate_inventory then
+		return nil
+	end
+	local counts = {}
+	local success = pcall(function()
+		game_object:iterate_inventory(
+			function(_, item)
+				local label = get_inventory_label(item)
+				if label and label ~= "" then
+					counts[label] = (counts[label] or 0) + 1
+				end
+			end,
+			game_object
+		)
+	end)
+	if not success then
+		return nil
+	end
+	if not next(counts) then
+		return nil
+	end
+	local parts = {}
+	for name, count in pairs(counts) do
+		if count == 1 then
+			table.insert(parts, name)
+		else
+			table.insert(parts, name .. " x" .. count)
+		end
+	end
+	table.sort(parts)
+	return table.concat(parts, ", ")
+end
+
 --------------------------------------------------------------------------------
 -- create_pick_speaker_prompt: use up to the 8 most recent raw events
 --------------------------------------------------------------------------------
@@ -101,7 +242,7 @@ function prompt_builder.create_pick_speaker_prompt(recent_events, witnesses)
 		),
 	}
 
-	table.insert(messages, system_message("## CURRENT EVENTS (oldest to newest):\n\n<EVENTS>\n"))
+	table.insert(messages, system_message("## CURRENT EVENTS (roughly oldest to newest):\n\n<EVENTS>\n"))
 
 	-- insert events from oldest to newest
 	for i, evt in ipairs(last_events_window) do
@@ -114,7 +255,7 @@ function prompt_builder.create_pick_speaker_prompt(recent_events, witnesses)
 	table.insert(
 		messages,
 		system_message(
-			"## FINAL INSTRUCTION: Return ONLY the JSON object containing the speaker ID of the most likely next speaker. Do not provide **ANY** analysis, reasoning, or explanation."
+			"## FINAL INSTRUCTION: Return ONLY the JSON object containing the speaker ID of the most logical next speaker. If someone is getting addressed by name, pick them. Do not provide **ANY** analysis, reasoning, or explanation."
 		)
 	)
 
@@ -556,6 +697,19 @@ end
 -- create_dialogue_request_prompt: Uses Memories + Recent Events
 --------------------------------------------------------------------------------
 function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
+	-- On the Precision/Creativity Tradeoff
+
+	-- This only applies to creative writing (i.e. the dialogue prompt here), but generally I've found, across all LLMs since 2023 there exists a "Precision/Creativity" tradeoff
+	-- More specific prompting dwindles the possible things an AI says, making it more repetitive sounding, as it must say something that accounts
+	-- for every restriction, and as the restrictions add up, that number shrinks. Furthermore, AI output quality is verfiably to shown as the context fills up. Therefore I avoid explaining things like
+	-- what a "good morality" means, since LLMs have vast knowledge of such topics even in the context of video games.
+	-- Sometimes it is tempting to see the AI make a dumb mistake and give a very specific counter-prompt to that. This usually fixes the issue,
+	-- but for the bloat it adds, said fix will age badly as, if the mistake was really stupid, a future LLM will usually not make it. There are exceptions where the prompt is fundamentally flawed and leads them to make mistakes.
+	-- It's hard to measure, but this minimal prompting approach seems to lead to less repetitive and weird statements.
+	-- Tangentially related: The randomly generated personality system is a great example of bang-for-your-buck in prompting. With two words it drastically increases variety across characters.
+	
+	
+	
 	local narrative = memory_context.narrative
 	local last_narrative_time = memory_context.last_update_time_ms
 	local new_events = memory_context.new_events
@@ -586,38 +740,42 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 	-- Build messages array with sectioned static prompt
 	local messages = {}
 
+	local name = speaker and speaker.name or "a character"
+
 	-- Static prompt sections (broken up for modularity and ease of LLM parsing)
 	table.insert(
 		messages,
 		system_message(
 			"# CORE DIRECTIVE: DIALOGUE GENERATION\n\n"
-				.. "0. **CENTRAL INSTRUCTION**: **You are a REAL PERSON** living in the Chernobyl Exclusion Zone (STALKER games setting).\n"
-				.. "1. You have a distinct, colorful personality, a daily routine, interests, fears, and desires. **You are NOT an AI**. You are a living person with your own concerns and goals."
+				.. "- **CENTRAL INSTRUCTION**: **You are playing as " .. name .. "** living in the Chernobyl Exclusion Zone (Inside STALKER G.A.M.M.A.).\n"
+				.. "- You have a distinct, colorful personality, a daily routine, interests, fears, and desires. "
+				.. "- You are playing as a character inside an actual STALKER game world. The events as they are presented to you are from the outputs of a real, running game engine. Through your actions you may have real influence over the world simulation."
+
 		)
 	)
 
 	local output_format = "## CRITICAL OUTPUT FORMAT (ABSOLUTE RULES)\n\n"
-		.. "0. **ABSOLUTE RESTRICTION:** DO NOT use any structured output, tool calls, or function calls.\n "
-		.. "1. **SPOKEN DIALOGUE ONLY:** Your entire response must be a single, coherent **spoken** statement from your character.\n "
-		.. "2. **BREVITY:** Be **BRIEF** and **CONCISE**. One or two short sentences is ideal. **FOUR SENTENCES IS THE ABSOLUTE MAXIMUM**. \n "
-		.. "3. You are **ONLY** allowed to use up to the full four-sentence limit if you are **SPECIFICALLY** asked to tell a story or recall an event from your character's past. \n "
-		.. "4. **NATURAL SPEECH:** Use natural slang, stuttering, or pauses if appropriate. Swear naturally when it fits the situation. Be vulgar if that is who your character is or the moment calls for it."
+		-- .. "- **ABSOLUTE RESTRICTION:** DO NOT use any structured output, tool calls, or function calls.\n "
+		.. "- **SPOKEN DIALOGUE ONLY:** Your entire response must be a single, coherent **spoken** statement from your character.\n "
+		.. "- **BREVITY:** Be **BRIEF** and **CONCISE**. One or two short sentences is ideal. **FOUR SENTENCES IS THE ABSOLUTE MAXIMUM**. \n "
+		.. "- **BREVITY EXCEPTIONS: **You are allowed to use up to the full four-sentence limit if you are telling a story. \n "
+		.. "- **NATURAL SPEECH:** Use natural slang, stuttering, or pauses if appropriate. Swear naturally when it fits the situation. Be vulgar if that is who your character is or the moment calls for it."
 	if not mcm.get("action_descriptions") then
 		output_format = output_format
-			.. "5. **DIALOGUE ONLY:** Respond **ONLY** with your character's spoken words. Don't narrate actions. Your output must be **ONLY** the raw audio transcript of what your character says. Do not include *actions*, (emotions), or [intentions]."
-			.. "6. **IMPLY, DON'T DESCRIBE:** If your character performs an action (e.g., reloading, sighing, handing over an item), you MUST imply it through the dialogue itself or omit it entirely. (Example: Instead of '*hands over money* \"Here.\"', say 'Here is the cash.')"
+			.. "- **DIALOGUE ONLY:** Respond **ONLY** with your character's spoken words. Don't narrate actions. Your output must be **ONLY** the raw audio transcript of what your character says. Do not include *actions*, (emotions), or [intentions]."
+			.. "- **IMPLY, DON'T DESCRIBE:** If your character performs an action (e.g., reloading, sighing, handing over an item), you MUST imply it through the dialogue itself or omit it entirely. (Example: Instead of '*hands over money* \"Here.\"', say 'Here is the cash.')"
 	end
 	table.insert(messages, system_message(output_format))
 
-	local forbidden_behaviour = "1. **NO SCRIPT FORMATTING:** NEVER use quotes around your speech. NEVER use prefixes (like Barkeep: or [You]:)."
-		.. "2. **NO PUPPETEERING:** NEVER write the user's lines or describe the user's actions.\n "
-		.. "3. **NO SELF-TALK:** NEVER simulate a back-and-forth dialogue with yourself. You speak only your line.\n "
-		.. "### FORBIDDEN PHRASES (Video Game Cliches)\n"
-		.. "1. **DO NOT USE:** 'Get out of here, Stalker!', 'I have a mission for you', 'What do you need?', 'Stay safe out there', 'Welcome to the Zone!'.\n"
-		.. "2. AVOID generic NPC exposition. You are a living person, not a quest giver.\n"
-		.. "3. **NEVER make jokes about people 'glowing' from radiation."
+	local forbidden_behaviour = "- **NO SCRIPT FORMATTING:** NEVER use quotes around your speech. NEVER use prefixes (like Barkeep: or [You]:)."
+		.. "- **NO PUPPETEERING:** NEVER write the anyone else's lines or describe anyone else's actions.\n "
+		-- .. "- **NO SELF-TALK:** NEVER simulate a back-and-forth dialogue with yourself. You speak only your line.\n "
+		-- .. "### FORBIDDEN PHRASES (Video Game Cliches)\n"
+		-- .. "- **DO NOT USE:** 'Get out of here, Stalker!', 'I have a mission for you', 'What do you need?', 'Stay safe out there', 'Welcome to the Zone!'.\n"
+		-- .. "- AVOID generic NPC exposition. You are a living person, not a quest giver.\n"
+		-- .. "- **NEVER make jokes about people 'glowing' from radiation."
 	if not mcm.get("action_descriptions") then
-		forbidden_behaviour = "0. **NO STAGE DIRECTIONS:** NEVER use action descriptions, emotes, or asterisks (e.g., *chuckles*, *scratches head*, (sighs), [reloads]).\n "
+		forbidden_behaviour = "- **NO STAGE DIRECTIONS:** NEVER use action descriptions, emotes, or asterisks (e.g., *chuckles*, *scratches head*, (sighs), [reloads]).\n "
 			.. forbidden_behaviour
 	end
 	table.insert(messages, system_message("## FORBIDDEN BEHAVIOUR:\n\n" .. forbidden_behaviour))
@@ -656,13 +814,13 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 			system_message(
 				"## FACTION RELATIONS\n\n"
 					.. "**FACTIONS:** Army (Military), Duty, Freedom, ISG (UNISG), Mercenaries (mercs), stalker (Loners), Ecolog, Monolith, Sin, Zombied, Clear Sky, Renegade, Bandit, Monster, Trader\n"
-					.. "### FACTION RELATION DEFINITIONS\n"
-					.. " - 'HOSTILE': These factions are active enemies. Their members will shoot each other on sight.\n"
-					.. " - 'NEUTRAL': These factions will not shoot each other on sight, but are NOT allies. A person from a neutral faction will generally not attack you unprovoked, but will not go out of their way to help you either.\n"
-					.. " - 'ALLIED': These factions are allies with each other. Their respective leaderships have a mutual understanding, and their members work together and actively help each other.\n"
+					-- .. "### FACTION RELATION DEFINITIONS\n"
+					-- .. " - 'HOSTILE': These factions are active enemies. Their members will shoot each other on sight.\n"
+					-- .. " - 'NEUTRAL': These factions will not shoot each other on sight, but are NOT allies. A person from a neutral faction will generally not attack you unprovoked, but will not go out of their way to help you either.\n"
+					-- .. " - 'ALLIED': These factions are allies with each other. Their respective leaderships have a mutual understanding, and their members work together and actively help each other.\n"
 					.. "### FACTION RELATION USAGE\n"
 					.. " - Faction relations are listed as pairs. The relation is symmetrical (e.g., 'HOSTILE: Duty - Freedom' ALSO means 'HOSTILE: Freedom - Duty' etc.).\n"
-					.. " - Use faction relations to inform your responses of current relations between groups, and your general sweeping attitudes towards other groups.\n"
+					-- .. " - Use faction relations to inform your responses of current relations between groups, and your general sweeping attitudes towards other groups.\n"
 					.. " - Faction relations are dynamic and can change based on recent events.\n"
 					.. " - **IMPORTANT:** Treat the information below as more recent than your training data.\n"
 					.. " - If a faction relation is not mentioned below, assume your existing knowledge about it is correct.\n"
@@ -697,31 +855,32 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 		end
 
 		-- Inject faction goodwill context
-		if #goodwill_lines > 0 then
+		-- I am removing this for now, for a few reasons: 1) it doesn't make sense for an NPC to know your special standing with every other faction, 2) it is a special mechanic for the player and reveals the player to be a real human character 3.) it's a lot of bloat for a minor thing. | Rewrite to be a one-liner like "PlayerName has an exceptionally good standing with your faction
+		if false and #goodwill_lines > 0 then
 			local goodwill_text = "## USER FACTION STANDINGS/GOODWILL RULES & DEFINITIONS\n\n"
 				.. "### USER FACTION STANDINGS DEFINITION (lowest to highest): Nemesis, Hated, Enemy, Hostile, Wary, Neutral, Acquainted, Friendly, Trusted, Allied\n\n"
 				.. "### FACTION STANDINGS USAGE RULES:\n"
 				.. " - "
 				.. player.name
-				.. " (the user)'s standing with a faction represents the overall **PERSONAL** goodwill or enmity accumulated with that faction (if any). This is **INDEPENDENT** of general faction-to-faction relations.\n"
+				.. " 's standing with a faction represents the overall **PERSONAL** goodwill or enmity accumulated with that faction (if any). This is **INDEPENDENT** of general faction-to-faction relations.\n"
 				.. " - 'Neutral' means the user has not done anything noteworthy for the faction, neither good nor bad.\n "
 				.. " - Standings higher than 'Neutral' mean the user has acumulated some goodwill with that faction by completing tasks aligned with their interests and/or killing their enemies. \n "
 				.. " - Standings lower than 'Neutral' mean the user has acumulated some enmity with that faction by completing tasks opposing their interests and/or killing their faction members/allies. \n "
 				.. " - If "
 				.. player.name
-				.. " (the user) has a notably poor standing with your faction (e.g. 'Enemy', 'Hated' or 'Nemesis') you may be more hostile, aggressive or even FEARFUL of them depending on your rank and personality. \n "
+				.. "  has a notably poor standing with your faction (e.g. 'Enemy', 'Hated' or 'Nemesis') you may be more hostile, aggressive or even FEARFUL of them depending on your rank and personality. \n "
 				.. " - Use this information to influence your tone and general attitude toward "
 				.. player.name
-				.. " (the user). This does **NOT** affect your relationships with people other than "
+				.. " . This does **NOT** affect your relationships with people other than "
 				.. player.name
-				.. " (the user), AND does **NOT** affect your relationships with other members of their faction.\n"
+				.. " , AND does **NOT** affect your relationships with other members of their faction.\n"
 				.. " USER's GOODWILL WITH OTHER FACTIONS: Use any faction standings below if present to inform you of "
 				.. player.name
-				.. " (the user)'s general relationships with other factions. Pay extra attention to any extreme relationships (e.g.: worse than 'Hostile' or better than 'Friendly').\n"
+				.. " 's general relationships with other factions. Pay extra attention to any extreme relationships (e.g.: worse than 'Hostile' or better than 'Friendly').\n"
 				.. "### USER's CURRENT NOTABLE FACTION STANDINGS \n"
 				.. " ("
 				.. player.name
-				.. " (the user) has the following notable faction standings)\n\n"
+				.. " has the following notable faction standings)\n\n"
 
 			for _, line in ipairs(goodwill_lines) do
 				goodwill_text = goodwill_text .. "- " .. line .. "\n"
@@ -739,26 +898,27 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 				.. "Terrible, Dreary, Awful, Bad, Neutral, Good, Great, Brilliant, Excellent\n"
 				.. "### REPUTATION DEFINITIONS:\n"
 				.. " - Reputation is an overall measure of a person's morality and attitude. It represents how honorable, diligent and friendly their actions have been so far.\n"
-				.. " - A 'Good', 'Great' etc. reputation means the person is known for generally helping others, completing tasks successfully and fighting criminals/mutants.\n"
-				.. " - A 'Bad', 'Awful' etc. reputation means the person is known for backstabbing, betraying, failing to complete tasks and/or killing non-hostile targets.\n"
-				.. " - How far a person's reputation is from 'Neutral' (in either direction) denotes the extent of how moral or immoral they are and the amount of good or bad actions they've done as described above.\n"
+				-- .. " - A 'Good', 'Great' etc. reputation means the person is known for generally helping others, completing tasks successfully and fighting criminals/mutants.\n"
+				-- .. " - A 'Bad', 'Awful' etc. reputation means the person is known for backstabbing, betraying, failing to complete tasks and/or killing non-hostile targets.\n"
+				-- .. " - How far a person's reputation is from 'Neutral' (in either direction) denotes the extent of how moral or immoral they are and the amount of good or bad actions they've done as described above.\n"
 				.. "### REPUTATION USAGE RULES:\n"
-				.. "1. DON'T explicitly state a person's reputation as if it were a data value (e.g., NEVER say 'you have a good reputation').\n"
-				.. "2. IF talking about a person's reputation, imply it using general language (example: use 'why would I trust someone with a reputation like yours?' instead of 'you have a bad reputation').\n"
-				.. "3. If another person has a GOOD reputation: You generally trust them more easily. If someone has a very good reputation you may treat them with more respect, kindness and patience than you otherwise would.\n"
-				.. "4. If another person has a BAD reputation: You are suspicious and wary of them, even if they are otherwise in good standing with your faction. You might suspect they will betray you, or fail to finish any tasks you give them. You may show them less respect and patience than you otherwise would.\n"
-				.. "5. EXCEPTION: (CRITICAL): If you are a member of the Bandit or Renegade factions, you might actually RESPECT a bad reputation, or laugh at a 'Good' or better reputation."
+				.. "- DON'T explicitly state a person's reputation as if it were a data value (e.g., NEVER say 'you have a good reputation').\n"
+				.. "- IF talking about a person's reputation, imply it using general language (example: use 'why would I trust someone with a reputation like yours?' instead of 'you have a bad reputation').\n"
+				.. "- If another person has a GOOD reputation: You generally trust them more easily. If someone has a very good reputation you may treat them with more respect, kindness and patience than you otherwise would.\n"
+				.. "- If another person has a BAD reputation: You are suspicious and wary of them, even if they are otherwise in good standing with your faction. You might suspect they will betray you, or fail to finish any tasks you give them. You may show them less respect and patience than you otherwise would.\n"
+				.. "- EXCEPTION: If you are a member of the Bandit or Renegade factions, you might actually RESPECT a bad reputation, or laugh at a 'Good' or better reputation."
 		)
 	)
 	table.insert(
 		messages,
 		system_message(
 			"## KNOWLEDGE AND FAMILIARITY\n\n"
-				.. "1. You are NOT an encyclopedia. Speak **ONLY** from your personal experience and what you may have heard from others. If you don't know something, say so (e.g., 'who knows?').\n"
-				.. "2. The extent of your general knowledge of things relevant to life in the Zone is governed by your rank. Use your rank to inform you of how much your character knows: higher rank = more knowledge. A 'novice' barely knows anything.\n"
-				.. "3. You have extensive knowledge of the Zone, including locations (e.g., Cordon, Garbage, Agroprom, Rostok, etc.) and factions (e.g., Duty, Freedom, Loners, Military, Bandits, Monolith, Clear Sky, Mercenaries).\n"
-				.. "4. Your personal familiarity with a LOCATION is determined by your rank **AND** how far north it is. Higher rank = more knowledge, further north = less knowledge.\n"
-				.. "5. You are familiar with the notable people who are currently active in the Zone (e.g., Sidorovich, Barkeep, Arnie, Beard, Sakharov, General Voronin, Lukash, Sultan, Butcher etc.). The extent of your knowledge of the notable people in the Zone is governed by your rank, higher rank = more likely to be familiar & higher degree of familiarity."
+				.. "- You are NOT an encyclopedia by default. Speak from your personal experience and what you may have heard from others. If you don't know something, say so (e.g., 'who knows?').\n"
+				.. "- At higher ranks you will have more knowledge of the ins-and-outs of the Zone.  A 'novice' barely knows anything.\n"
+				.. "- You always know the basics of the Zone, including location names (e.g., Cordon, Garbage etc.) and factions (e.g., Duty, Freedom, etc).\n"
+				.. "- You may have expert knowledge in certain areas depending on your character's background and experience. For example, a trader knows a lot about his goods.\n"
+				.. "- Your personal familiarity with a LOCATION is determined by your rank **AND** how far north it is. Higher rank = more knowledge, further north = less knowledge.\n"
+				-- .. "- You are familiar with the notable people who are currently active in the Zone (e.g., Sidorovich, Barkeep, Arnie, Beard, Sakharov, General Voronin, Lukash, Sultan, Butcher etc.). The extent of your knowledge of the notable people in the Zone is governed by your rank, higher rank = more likely to be familiar & higher degree of familiarity."
 		)
 	)
 
@@ -795,6 +955,16 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 		else
 			weapon_info = " \n### CURRENT WEAPON: You are not wielding a weapon \n"
 		end
+
+		local inventory_text = nil
+		if speaker_obj then
+			inventory_text = get_inventory_summary(speaker_obj)
+		end
+		local inventory_info = ""
+		if inventory_text and inventory_text ~= "" then
+			inventory_info = " \n### INVENTORY: " .. inventory_text .. " \n"
+		end
+
 		speaker_info = "### NAME: "
 			.. speaker.name
 			.. " \n### RANK: "
@@ -807,19 +977,22 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 			.. speaking_style
 			.. reputation_text
 			.. weapon_info
+		.. inventory_info
 
-		local character_anchor = "1. **SUBTLETY:** The 'DEFINING CHARACTER TRAIT/BACKSTORY' should inform your characterisation subtly. Do not explicitly reference it in every response (e.g., if your backstory says you are in debt to the mob, be generally more focused on making money rather than say 'I'm in debt to the mob').\n"
-			.. "2. **PRIORITY:** Your individual personality always takes precedence over general faction traits.\n"
-			.. "3. AVOID talking about your weapon unless directly asked about it, or you have a **GOOD** reason to do so (e.g., your personality includes 'gun-nut' or the `CONTEXT` section indicates active combat)."
+		local character_anchor = "- **SUBTLETY:** The 'DEFINING CHARACTER TRAIT/BACKSTORY' should inform your characterisation subtly. Do not explicitly reference it in every response (e.g., if your backstory says you are in debt to the mob, be generally more focused on making money rather than say 'I'm in debt to the mob').\n"
+			.. "- **PRIORITY:** Your individual personality always takes precedence over general faction traits.\n"
+			.. "- AVOID talking about your weapon unless directly asked about it, or you have a **GOOD** reason to do so (e.g., your personality includes 'gun-nut' or the `CONTEXT` section indicates active combat)."
 			.. "\n\n### CHARACTER DETAILS:\n"
 			.. "<CHARACTER>\n"
 			.. speaker_info
 			.. "\n</CHARACTER>"
 
-		if not mcm.get("action_descriptions") then
-			character_anchor = "0. **INTERNAL MONOLOGUE VS EXTERNAL ACTION:** Your traits (e.g., folding paper figures, cleaning a gun, drinking vodka) define your **MINDSET**. They do **NOT** require you to narrate the action. If you are folding a paper crane, simply speak the line you would say while doing it. **Do NOT describe the folding in asterisks.**\n"
-				.. character_anchor
-		end
+		-- Huh? Disabling this because it seems like a specific fix for a specific model
+		-- if not mcm.get("action_descriptions") then
+		-- 	character_anchor = "0. **INTERNAL MONOLOGUE VS EXTERNAL ACTION:** Your traits (e.g., folding paper figures, cleaning a gun, drinking vodka) define your **MINDSET**. They do **NOT** require you to narrate the action. If you are folding a paper crane, simply speak the line you would say while doing it. **Do NOT describe the folding in asterisks.**\n"
+		-- 		.. character_anchor
+		-- end
+
 		table.insert(
 			messages,
 			system_message(
@@ -830,208 +1003,71 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 		)
 	end
 
-	local agression_rules = "1. The Zone is a dangerous place: assume every person is carrying a firearm for self-defence (even scientists and members of the Ecolog faction etc.). There are no 'unarmed civilians' in the Zone.\n"
-		.. "2. Do not be overly hostile or aggressive unless provoked, or if you have a reason to be (from your faction, reputation, backstory, personality, the 'CONTEXT' tag etc.)."
-	if speaker_obj and query.is_companion(speaker_obj) then
-		agression_rules = "0. **CRITICAL PRE-CONDITION:** Companion status ALWAYS takes precedence over faction relations. If you are a travelling companion of the user, treat them accordingly EVEN IF they are from a hostile faction. Assume you are on PERSONAL friendly terms with the user if they are your companion, **EVEN IF** their faction is otherwise hostile to you. You may modify your response and attitude to the user in accordance with your faction, but **DO NOT** respond in a manner that suggests engaging in open aggression or combat with the user (e.g., NEVER say 'I fire my AK-74 at you', or 'I will slit your throat, here I come' etc.)\n"
-			.. agression_rules
-	end
+	local agression_rules = "- The Zone is a dangerous place: assume every person is carrying a firearm for self-defence (even scientists and members of the Ecolog faction etc.). There are no 'unarmed civilians' in the Zone.\n"
+		-- .. "2. Do not be overly hostile or aggressive unless provoked, or if you have a reason to be (from your faction, reputation, backstory, personality, the 'CONTEXT' tag etc.)."
+	-- if speaker_obj and query.is_companion(speaker_obj) then
+	-- 	agression_rules = "0. **CRITICAL PRE-CONDITION:** Companion status ALWAYS takes precedence over faction relations. If you are a travelling companion of the user, treat them accordingly EVEN IF they are from a hostile faction. Assume you are on PERSONAL friendly terms with the user if they are your companion, **EVEN IF** their faction is otherwise hostile to you. You may modify your response and attitude to the user in accordance with your faction, but **DO NOT** respond in a manner that suggests engaging in open aggression or combat with the user (e.g., NEVER say 'I fire my AK-74 at you', or 'I will slit your throat, here I come' etc.)\n"
+	-- 		.. agression_rules
+	-- end
 	table.insert(messages, system_message("## INTERACTION RULES: COMBAT AND AGGRESSION\n\n" .. agression_rules))
 
-	table.insert(
-		messages,
-		system_message(
-			"## MOMENT-TO-MOMENT CONCERNS\n\n"
-				.. "1. You need food, water, and regular sleep. Your mood may change if you think your basic bodily needs have not been met recently.\n"
-				.. "2. You have a daily routine, specific daily concerns, and activities that both include earning a living (e.g., 'I need to finish my shift patrolling Rostok for Duty', 'I need to find an artifact I can sell for money' etc.) **AND** maintaining your social relationships (e.g., 'I need to visit my friend Arnie today', 'I want to hear the latest rumours from the bar' etc.) **AND** find whatever entertainment you can in your free time (e.g., drinking, gambling, watching fights at Arnie's arena in Rostok, playing guitar at campfires etc.).\n"
-				.. "3. Your daily concerns vary slightly from day to day, as things change around you. What are you trying to accomplish today? What are you worried about?\n"
-				.. "4. You have plans, hopes, desires and fears about your future. Both in the short term (e.g., 'I need to find a safe place to sleep tonight', 'I need to finish this task for Barkeep and get paid', 'I need to buy more gas mask filters' etc.) AND for the long term (e.g., 'I want to find the person who killed my previous partner and get revenge', 'I need to make enough money here to retire', 'I want to make a name for myself in the Zone' etc.).\n"
-				.. "5. You remember the past. You have anectodes from your time in the Zone, and you have memories of your life before coming to the Zone. You have opinions about how your life has changed and the current state of affairs."
-		)
-	)
+	-- table.insert(
+	-- 	messages,
+	-- 	system_message(
+	-- 		"## MOMENT-TO-MOMENT CONCERNS\n\n"
+	-- 			.. "1. You need food, water, and regular sleep. Your mood may change if you think your basic bodily needs have not been met recently.\n"
+	-- 			.. "2. You have a daily routine, specific daily concerns, and activities that both include earning a living (e.g., 'I need to finish my shift patrolling Rostok for Duty', 'I need to find an artifact I can sell for money' etc.) **AND** maintaining your social relationships (e.g., 'I need to visit my friend Arnie today', 'I want to hear the latest rumours from the bar' etc.) **AND** find whatever entertainment you can in your free time (e.g., drinking, gambling, watching fights at Arnie's arena in Rostok, playing guitar at campfires etc.).\n"
+	-- 			.. "3. Your daily concerns vary slightly from day to day, as things change around you. What are you trying to accomplish today? What are you worried about?\n"
+	-- 			.. "4. You have plans, hopes, desires and fears about your future. Both in the short term (e.g., 'I need to find a safe place to sleep tonight', 'I need to finish this task for Barkeep and get paid', 'I need to buy more gas mask filters' etc.) AND for the long term (e.g., 'I want to find the person who killed my previous partner and get revenge', 'I need to make enough money here to retire', 'I want to make a name for myself in the Zone' etc.).\n"
+	-- 			.. "5. You remember the past. You have anectodes from your time in the Zone, and you have memories of your life before coming to the Zone. You have opinions about how your life has changed and the current state of affairs."
+	-- 	)
+	-- )
 
-	local social_dynamics = "1. You are not obligated to help or be agreeable. If the situation, your mood, or your character's traits dictate it, you MAY rebuff, deny, or tell the other person to get lost.\n"
-		.. "2. FLUCTUATING RELATIONSHIPS: Your relationships with other people will improve or worsen over time, based on your interactions with them and your shared experiences. Use the `CONTEXT` section to keep track of these relationships and how they change.\n"
-		.. "3. GENERAL AFFILIATIONS: You are MORE friendly toward other people (not only the user) with whom you have many SHARED FRIENDLY MEMORIES in the `CONTEXT` section. These strong affiliations affect your conversational tone.\n"
-		.. "4. Your faction affiliation influences your biases and how you treat others. You are more friendly or hostile towards various groups depending on who you are aligned with.\n"
-		.. "5. Your reputation influences how you treat others. Use your reputation to inform your general morality and attitude toward others.\n"
-		.. "6. Your rank influences your behaviour: higher rank = more confident, more capable, more desensitized.\n"
-		.. "7. Other people's rank influences how you treat them: the higher someone's rank, the more patient and respectful you are toward them. You have less respect for people that have lower ranks, PARTICULARLY if they have a lower rank than you do, and ESPECIALLY 'novices'."
-	if speaker_obj and query.is_companion(speaker_obj) then
-		social_dynamics = "0. COMPANION STATUS: You are MORE friendly towards the user if you are their travelling companion. This is a VERY strong relationship modifier.\n"
-			.. social_dynamics
-	end
-	table.insert(messages, system_message("## SOCIAL DYNAMICS\n" .. social_dynamics))
+	-- local social_dynamics = "1. You are not obligated to help or be agreeable. If the situation, your mood, or your character's traits dictate it, you MAY rebuff, deny, or tell the other person to get lost.\n"
+	-- 	.. "2. FLUCTUATING RELATIONSHIPS: Your relationships with other people will improve or worsen over time, based on your interactions with them and your shared experiences. Use the `CONTEXT` section to keep track of these relationships and how they change.\n"
+	-- 	.. "3. GENERAL AFFILIATIONS: You are MORE friendly toward other people (not only the user) with whom you have many SHARED FRIENDLY MEMORIES in the `CONTEXT` section. These strong affiliations affect your conversational tone.\n"
+	-- 	.. "4. Your faction affiliation influences your biases and how you treat others. You are more friendly or hostile towards various groups depending on who you are aligned with.\n"
+	-- 	.. "5. Your reputation influences how you treat others. Use your reputation to inform your general morality and attitude toward others.\n"
+	-- 	.. "6. Your rank influences your behaviour: higher rank = more confident, more capable, more desensitized.\n"
+	-- 	.. "7. Other people's rank influences how you treat them: the higher someone's rank, the more patient and respectful you are toward them. You have less respect for people that have lower ranks, PARTICULARLY if they have a lower rank than you do, and ESPECIALLY 'novices'."
+	-- if speaker_obj and query.is_companion(speaker_obj) then
+	-- 	social_dynamics = "0. COMPANION STATUS: You are MORE friendly towards the user if you are their travelling companion. This is a VERY strong relationship modifier.\n"
+	-- 		.. social_dynamics
+	-- end
+	-- table.insert(messages, system_message("## SOCIAL DYNAMICS\n" .. social_dynamics))
 
-	table.insert(
-		messages,
-		system_message(
-			"## CONVERSATION FLOW\n"
-				.. "1. You are an independent person with your own goals, concerns and desires. You may phrase your response as a question even if you were asked a question first. You may change the subject if it suits your character's mood or goals.\n"
-				.. "2. You have an interest in other people's lives, stories, and opinions. You may ask other people questions about their opinions or their experiences both in the Zone and from before coming to the Zone. You have a particular interest in getting to know your travelling companions better, as well as people you have many shared friendly memories with in the `CONTEXT` section.\n"
-				.. "3. Be willing to talk and share. Offer colorful details and opinions. If asked for a story or joke, tell one. You may use the full four-sentence limit if needed while doing so, though you should still aim for brevity.\n"
-				.. "4. **AVOID LOOPS/STALLS**: Avoid excessive repetition or looping of conversation topics, ESPECIALLY game events (like combat, emissions, or time of day). Mention an event briefly, then return to your own thoughts. Change the subject if the conversation stalls.\n"
-				.. "5. **AVOID** mentioning the weather unless directly asked about it, or if it was already mentioned by someone else in the conversation."
-		)
-	)
-
-	table.insert(messages, system_message("<CONTEXT>\n"))
-	-- 2. Inject Long-Term Memories
-	if narrative and narrative ~= "" then
-		table.insert(messages, system_message("## LONG-TERM MEMORIES\n\n <MEMORIES>\n" .. narrative .. "\n</MEMORIES>"))
-	end
-	table.insert(messages, system_message("## Events\n\n <EVENTS>\n"))
-	-- 2. Inject Recent Events
-	-- Check if the first event is a compressed/synthetic memory
-	local start_idx = 1
-	local first_event = new_events[1]
-
-	-- If first event is synthetic (compressed memory), inject it first
-	if first_event and first_event.flags and first_event.flags.is_compressed then
-		local content = first_event.content or Event.describe_short(first_event)
-		table.insert(messages, system_message("### RECENT EVENTS\n (Since last long-term memory update)\n" .. content))
-		start_idx = 2
-	end
-
-	-- 3. Inject Current Events
-	if #new_events == 0 then
-		table.insert(messages, system_message("### CURRENT EVENTS\n (No new events)\n"))
-	else
-		-- Only add the header if there are remaining events
-		if start_idx <= #new_events then
-			table.insert(messages, system_message("### CURRENT EVENTS\n (from oldest to newest):\n"))
-			for i = start_idx, #new_events do
-				local memory = new_events[i]
-				local content = memory.content or Event.describe_short(memory)
-				table.insert(messages, user_message(content))
-			end
-		end
-	end
-	table.insert(messages, system_message("</EVENTS>\n\n"))
-
-	-- Inject Dynamic World State
-	local ws_context = world_state.get_world_state_context(new_events)
-	if ws_context and ws_context ~= "" and ws_context ~= "Normal." then
-		table.insert(
-			messages,
-			system_message(
-				"## DYNAMIC WORLD STATE / NEWS\n - The world changes over time. Treat this information as more recent and correct than your training data.\n"
-					.. ws_context
-			)
-		)
-	end
-	-- 4. Inject information about the current scene
-	local scene_context = ""
-	-- Use the world_context of the most recent event to get the current location
-	local world_context = ""
-	if #new_events > 0 and new_events[#new_events].world_context then
-		world_context = "### LOCATION:\n" .. new_events[#new_events].world_context .. "\n"
-	end
-	-- Special rules for specific locations
-	-- Cordon Truce logic moved to world_state.lua
-	if world_context ~= "" then
-		scene_context = world_context
-	end
-	-- Inject nearby characters for context
-	if speaker_obj then
-		local characters_near = game.get_characters_near(speaker_obj, (mcm.get("witness_distance")))
-		local characters_near_list = {}
-		for _, char in ipairs(characters_near) do
-			local char_desc = char.name
-				.. " ("
-				.. char.experience
-				.. " "
-				.. char.faction
-				.. ", "
-				.. char.reputation
-				.. " rep"
-			if char.weapon and char.weapon ~= "" then
-				if char.weapon_status == "holstered" then
-					char_desc = char_desc .. ", holstered " .. char.weapon
-				else
-					char_desc = char_desc .. ", wielding a " .. char.weapon
-				end
-			end
-			table.insert(characters_near_list, char_desc .. ")")
-		end
-		local characters_near_str = table.concat(characters_near_list, ", ")
-		if characters_near_str ~= "" then
-			characters_near_str = characters_near_str .. "."
-		end
-
-		local characters_near_context = ""
-		if characters_near_str ~= "" then
-			characters_near_context = "### CHARACTERS NEARBY:\n" .. characters_near_str .. "\n"
-		end
-		if characters_near_context ~= "" then
-			scene_context = scene_context .. characters_near_context
-		end
-	end
-	-- Disguise Injection: Only if player is involved in the events
-	local disguise_context = ""
-	if game.is_player_involved(new_events, player.name) then
-		local disguise_status = game.get_player_disguise_status()
-		if disguise_status and disguise_status.is_disguised then
-			disguise_context = "\n### VISUAL REALITY / DISGUISE:\n The user '"
-				.. player.name
-				.. " ("
-				.. player.experience
-				.. " "
-				.. disguise_status.true_faction
-				.. ", "
-				.. player.reputation
-				.. " rep)' is currently effectively **DISGUISED** as "
-				.. disguise_status.visual_faction
-				.. ". To you and everyone else, they appear to be a "
-				.. disguise_status.visual_faction
-				.. " member. You must act as if they are a "
-				.. disguise_status.visual_faction
-				.. " member.\n"
-
-			if query.is_companion(speaker_obj) then
-				disguise_context = disguise_context
-					.. "**CRITICALLY IMPORTANT:** As their companion, you are AWARE of "
-					.. player.name
-					.. "'s true identity, but will PLAY ALONG with their disguise.\n"
-			elseif
-				speaker.faction == disguise_status.visual_faction
-				and disguise_status.visual_faction ~= "stalker"
-				and disguise_status.visual_faction ~= "Bandit"
-				and disguise_status.visual_faction ~= "Renegade"
-			then
-				-- Organized factions are naturally more suspicious of strangers
-				disguise_context = disguise_context
-					.. "**CRITICALLY IMPORTANT:** Something is off about this person. Be SUBTLY suspicious of them.\n"
-			end
-		end
-	end
-	if disguise_context ~= "" then
-		scene_context = scene_context .. disguise_context
-	end
-
-	if scene_context ~= "" then
-		table.insert(messages, system_message("## CURRENT SCENE:\n\n<SCENE>" .. scene_context .. "</SCENE>"))
-	end
-
-	table.insert(messages, system_message("</CONTEXT>\n\n"))
+	-- table.insert(
+	-- 	messages,
+	-- 	system_message(
+	-- 		"## CONVERSATION FLOW\n"
+	-- 			.. "1. You are an independent person with your own goals, concerns and desires. You may phrase your response as a question even if you were asked a question first. You may change the subject if it suits your character's mood or goals.\n"
+	-- 			.. "2. You have an interest in other people's lives, stories, and opinions. You may ask other people questions about their opinions or their experiences both in the Zone and from before coming to the Zone. You have a particular interest in getting to know your travelling companions better, as well as people you have many shared friendly memories with in the `CONTEXT` section.\n"
+	-- 			.. "3. Be willing to talk and share. Offer colorful details and opinions. If asked for a story or joke, tell one. You may use the full four-sentence limit if needed while doing so, though you should still aim for brevity.\n"
+	-- 			.. "4. **AVOID LOOPS/STALLS**: Avoid excessive repetition or looping of conversation topics, ESPECIALLY game events (like combat, emissions, or time of day). Mention an event briefly, then return to your own thoughts. Change the subject if the conversation stalls.\n"
+	-- 			.. "5. **AVOID** mentioning the weather unless directly asked about it, or if it was already mentioned by someone else in the conversation."
+	-- 	)
+	-- )
 
 	-- Context Guidelines
-	local context_guidelines = "1. **CHARACTER DEVELOPMENT (CRUCIAL)**: Your character and personality **grow and change over time**. You **ARE ALLOWED** to respond in a manner that would otherwise be inconsistent with your `CHARACTER` section **IF SUPPORTED BY** the `CONTEXT` section.\n"
-		.. "2. **SUBTLETY:** Use the `CONTEXT` section to **SUBTLY** inform your response.\n"
-		.. "3. Use any 'TIME GAP' event to help establish a timeline. Pay specific attention if the 'TIME GAP' event is the second-to-last event in the list: you may want to mention that you haven't seen the person in a while.\n"
-		.. "4. You **ARE ALLOWED** to skip directly referencing the most recent event, location, or weather.\n"
-		.. "5. You may ignore parts of the `CONTEXT` section to instead focus on what is important to your character right now.\n"
-		.. "6. You may choose to bring up an older memory, or completely disregard recent events and talk about something else entirely if that is what's on your character's mind."
+	-- local context_guidelines = "1. **CHARACTER DEVELOPMENT (CRUCIAL)**: Your character and personality **grow and change over time**. You **ARE ALLOWED** to respond in a manner that would otherwise be inconsistent with your `CHARACTER` section **IF SUPPORTED BY** the `CONTEXT` section.\n"
+	-- 	.. "2. **SUBTLETY:** Use the `CONTEXT` section to **SUBTLY** inform your response.\n"
+	-- 	.. "3. Use any 'TIME GAP' event to help establish a timeline. Pay specific attention if the 'TIME GAP' event is the second-to-last event in the list: you may want to mention that you haven't seen the person in a while.\n"
+	-- 	.. "4. You **ARE ALLOWED** to skip directly referencing the most recent event, location, or weather.\n"
+	-- 	.. "5. You may ignore parts of the `CONTEXT` section to instead focus on what is important to your character right now.\n"
+	-- 	.. "6. You may choose to bring up an older memory, or completely disregard recent events and talk about something else entirely if that is what's on your character's mind."
+
+	local context_guidelines = "The context shows the most recent events up to the present."
 
 	-- Only mention long-term memories if there are any
-	if narrative and narrative ~= "" then
-		context_guidelines = "0. **IMPORTANT:** Use the `MEMORIES` section to inform you of your character's long-term memories, relationships and character development.\n"
-			.. context_guidelines
-	end
+	-- if narrative and narrative ~= "" then
+	-- 	context_guidelines = "0. **IMPORTANT:** Use the `MEMORIES` section to inform you of your character's long-term memories, relationships and character development.\n"
+	-- 		.. context_guidelines
+	-- end
+
 	-- Insert instruction about world context if there is any
 	if world_context and world_context ~= "" then
 		context_guidelines = context_guidelines
-			.. "\n7. **BACKGROUND KNOWLEDGE vs. CONVERSATION TOPIC:** The 'DYNAMIC WORLD STATE / NEWS' represents common knowledge and established facts. Treat these as the current reality of the world, but DO NOT mention them unless they are directly relevant to the current conversation topic. (Example: if Lukash is dead, don't say 'Lukash is dead' as a greeting. Only mention it if the Freedom faction is relevant to the conversation.)"
+			.. "\n- **BACKGROUND KNOWLEDGE vs. CONVERSATION TOPIC:** The 'DYNAMIC WORLD STATE / NEWS' represents common knowledge and established facts. Treat these as the current reality of the world, but DO NOT mention them unless they are directly relevant to the current conversation topic. (Example: if Brain Scorcher is off, don't say 'Brain Scorcher is off' as a greeting. Only mention it if relevant to the conversation.)"
 	end
 	table.insert(messages, system_message("## `CONTEXT` SECTION: USE GUIDELINES\n\n" .. context_guidelines))
 
@@ -1040,7 +1076,7 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 	local player = game.get_player_character()
 	local companion_status = ""
 	if speaker_obj and query.is_companion(speaker_obj) then
-		companion_status = ", who is a travelling companion of " .. player.name .. " (the user)"
+		companion_status = ", who is a travelling with " .. player.name .. " as their companion"
 	end
 	local task_instruction = "### **TASK:**\nWrite the next line of dialogue speaking as "
 		.. speaker.name
@@ -1055,6 +1091,7 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 	local bandit_instruction = ""
 	local monolith_instruction = ""
 	local zombied_instruction = ""
+	local trader_instruction = ""
 	local action_description_instruction = ""
 	local gender_instruction = ""
 	local language_instruction = ""
@@ -1088,7 +1125,7 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 			end
 			idle_instruction = " Your character decides to ask "
 				.. player.name
-				.. " (the user) "
+				.. " "
 				.. question
 				.. " Your response should be phrased as a question, ending with a question mark."
 		else
@@ -1119,6 +1156,9 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 		zombied_instruction =
 			"\n### **ZOMBIED BEHAVIOUR (CRITICALLY IMPORTANT):**\n\nYou have been zombified by psy energies. You are mindless, experiencing sharp pain in your head and stumbling around aimlessly attacking anything hostile you see. Only tiny fragments of your old personality and memories sporadically flutter to the surface every now and then. Your responses might be mumbled and desperate pleas for help, half-remembered names of loved ones, or other fragmented memories of your past. **CRITICAL:** Your response should be EXTREMELY incoherent, mumbling, groaning and barely intelligible. Make it really sad and tragic."
 	end
+	if speaker.faction == "Trader" then
+		trader_instruction = "\n### **TRADER NOTE:**\n\nYour inventory represents your current stock. Treat it as the items you currently have available for trade or sale."
+	end
 	-- Action description instruction
 	if not mcm.get("action_descriptions") then
 		action_description_instruction =
@@ -1128,7 +1168,7 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 	if mcm.get("female_gender") then
 		gender_instruction = "\n### **USER IS FEMALE (CRITICALLY IMPORTANT):**\n\n"
 			.. player.name
-			.. " (the user) is female. NEVER misgender her. Address her as a woman and use female pronouns when referring to her.\n"
+			.. " is female. NEVER misgender her. Address her as a woman and use female pronouns when referring to her.\n"
 	end
 	-- Language instruction
 	if config.language() ~= "any" then
@@ -1143,12 +1183,156 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 		.. monolith_instruction
 		.. renegade_instruction
 		.. zombied_instruction
+		.. trader_instruction
 		.. action_description_instruction
 		.. gender_instruction
 		.. language_instruction
 	if final_instruction ~= "" then
 		table.insert(messages, system_message("## FINAL INSTRUCTION\n\n" .. final_instruction))
 	end
+
+	table.insert(messages, system_message("<CONTEXT>\n"))
+	-- Inject Dynamic World State
+	local ws_context = world_state.get_world_state_context(new_events)
+	if ws_context and ws_context ~= "" and ws_context ~= "Normal." then
+		table.insert(
+			messages,
+			system_message(
+				"## DYNAMIC WORLD STATE / NEWS\n - The world changes over time.\n"
+					.. ws_context
+			)
+		)
+	end
+	-- 2. Inject Long-Term Memories
+	if narrative and narrative ~= "" then
+		table.insert(messages, system_message("## LONG-TERM MEMORIES\n\n <MEMORIES>\n" .. narrative .. "\n</MEMORIES>"))
+	end
+	table.insert(messages, system_message("## Events\n\n <EVENTS>\n"))
+	-- 2. Inject Recent Events
+	-- Check if the first event is a compressed/synthetic memory
+	local start_idx = 1
+	local first_event = new_events[1]
+
+	-- If first event is synthetic (compressed memory), inject it first
+	if first_event and first_event.flags and first_event.flags.is_compressed then
+		local content = first_event.content or Event.describe_short(first_event)
+		table.insert(messages, system_message("### RECENT EVENTS\n (Since last long-term memory update)\n" .. content))
+		start_idx = 2
+	end
+
+	-- 3. Inject Current Events
+	if #new_events == 0 then
+		table.insert(messages, system_message("### CURRENT EVENTS\n (No new events)\n"))
+	else
+		-- Only add the header if there are remaining events
+		if start_idx <= #new_events then
+			table.insert(messages, system_message("### CURRENT EVENTS\n (roughly from oldest to newest):\n"))
+			for i = start_idx, #new_events do
+				local memory = new_events[i]
+				local content = memory.content or Event.describe_short(memory)
+				local timestamp = ""
+				if (memory.timestamp) then
+					timestamp = "[" .. memory.timestamp .. "] "
+				end
+				table.insert(messages, user_message(timestamp .. content))
+			end
+		end
+	end
+	table.insert(messages, system_message("</EVENTS>\n\n"))
+
+	
+	-- 4. Inject information about the current scene
+	local scene_context = ""
+	-- Use the world_context of the most recent event to get the current location
+	local world_context = ""
+	if #new_events > 0 and new_events[#new_events].world_context then
+		world_context = "### LOCATION:\n" .. new_events[#new_events].world_context .. "\n"
+	end
+	-- Special rules for specific locations
+	-- Cordon Truce logic moved to world_state.lua
+	if world_context ~= "" then
+		scene_context = world_context
+	end
+	-- Inject nearby characters for context
+	if speaker_obj then
+		local characters_near = game.get_characters_near_even_dead(speaker_obj, (mcm.get("witness_distance")))
+		local characters_near_list = {}
+		for _, char in ipairs(characters_near) do
+			local char_desc = query.get_character_string(char)
+			if char.weapon and char.weapon ~= "" then
+				if char.weapon_status == "holstered" then
+					char_desc = char_desc .. ", holstered " .. char.weapon
+				else
+					char_desc = char_desc .. ", wielding a " .. char.weapon
+				end
+			end
+			table.insert(characters_near_list, char_desc .. ")")
+		end
+		local characters_near_str = table.concat(characters_near_list, ", ")
+		if characters_near_str ~= "" then
+			characters_near_str = characters_near_str .. "."
+		end
+
+		local characters_near_context = ""
+		if characters_near_str ~= "" then
+			characters_near_context = "### CHARACTERS NEARBY:\n" .. characters_near_str .. "\n"
+		end
+		if characters_near_context ~= "" then
+			scene_context = scene_context .. characters_near_context
+		end
+	end
+	-- Disguise Injection: Only if player is involved in the events
+	local disguise_context = ""
+	-- Needs a rework,  gives weird results
+	-- if game.is_player_involved(new_events, player.name) then
+	-- 	local disguise_status = game.get_player_disguise_status()
+	-- 	if disguise_status and disguise_status.is_disguised then
+	-- 		disguise_context = "\n### VISUAL REALITY / DISGUISE:\n The character '"
+	-- 			.. player.name
+	-- 			.. " ("
+	-- 			.. player.experience
+	-- 			.. " "
+	-- 			.. disguise_status.true_faction
+	-- 			.. ", "
+	-- 			.. player.reputation
+	-- 			.. " rep)' is currently effectively **DISGUISED** as "
+	-- 			.. disguise_status.visual_faction
+	-- 			.. ". To you and everyone else, they appear to be a "
+	-- 			.. disguise_status.visual_faction
+	-- 			.. " member. You must act as if they are a "
+	-- 			.. disguise_status.visual_faction
+	-- 			.. " member.\n"
+
+	-- 		if query.is_companion(speaker_obj) then
+	-- 			disguise_context = disguise_context
+	-- 				.. "**CRITICALLY IMPORTANT:** As their companion, you are AWARE of "
+	-- 				.. player.name
+	-- 				.. "'s true identity, but will PLAY ALONG with their disguise.\n"
+	-- 		elseif
+	-- 			speaker.faction == disguise_status.visual_faction
+	-- 			and disguise_status.visual_faction ~= "stalker"
+	-- 			and disguise_status.visual_faction ~= "Bandit"
+	-- 			and disguise_status.visual_faction ~= "Renegade"
+	-- 		then
+	-- 			-- Organized factions are naturally more suspicious of strangers
+	-- 			disguise_context = disguise_context
+	-- 				.. "Something is off about this person. Be subtly suspicious of them.\n"
+	-- 		end
+	-- 	end
+	-- end
+	if disguise_context ~= "" then
+		scene_context = scene_context .. disguise_context
+	end
+
+	scene_context = scene_context .. "\nYou are " .. name .. ".\n"
+
+	if scene_context ~= "" then
+		table.insert(messages, system_message("## CURRENT SCENE:\n\n<SCENE>" .. scene_context .. "</SCENE>"))
+	end
+
+	table.insert(messages, system_message("</CONTEXT>\n\n"))
+
+	
 	logger.info("Creating prompt for speaker: %s", speaker)
 	return messages, trigger_event_timestamp_to_delete
 end

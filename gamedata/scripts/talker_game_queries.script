@@ -39,19 +39,111 @@ end
 
 -- OBJECTS
 
+-- Build a player injury status string from the body health system globals.
+function get_player_injury_status()
+    if not talker_mcm or not talker_mcm.get("show_player_injury_status") then
+        return ""
+    end
+    if (not zzz_player_injuries) then
+        return ""
+    end
+    local health = zzz_player_injuries.health
+    local maxhp = zzz_player_injuries.maxhp
+    if type(health) ~= "table" or type(maxhp) ~= "table" then
+        return ""
+    end
+
+    local parts = {
+        {key = "rightarm", label = "right arm"},
+        {key = "leftarm", label = "left arm"},
+        {key = "rightleg", label = "right leg"},
+        {key = "leftleg", label = "left leg"},
+        {key = "torso", label = "torso"}
+    }
+
+    local injuries = {}
+    for _, part in ipairs(parts) do
+        local part_health = health[part.key]
+        local part_max = maxhp[part.key]
+        if type(part_health) == "number" and type(part_max) == "number" and part_max > 0 and part_health < part_max then
+            local ratio = part_health / part_max
+            local prefix = ""
+            if ratio > 0.66 then
+                prefix = "minor "
+            elseif ratio <= 0.33 then
+                prefix = "major "
+            end
+            injuries[#injuries + 1] = prefix .. part.label .. " injury"
+        end
+    end
+
+    if #injuries == 0 then
+        return ""
+    end
+
+    return ", " .. table.concat(injuries, ", ")
+end
+
+function get_player_radiation_status(char)
+    if not char or type(char.game_obj) ~= "table" then
+        return ""
+    end
+
+    local radiation = char.game_obj.radiation
+    if type(radiation) ~= "number" or radiation <= 0.33 then
+        return ""
+    end
+
+    if radiation >= 0.66 then
+        return ", Radiation poisoned"
+    end
+
+    return ", Radioactive"
+end
+
 -- Helper to get consistent formatting for monsters/zombies vs humans in event logs
 function get_character_event_info(char)
     if not char then return "%s", {"Unknown"} end
+
+    local status = "" -- NEVER USE ANY % SYMBOL IN THIS VAR
+    if type(char.game_obj.health) == "number" then
+        local health_pct = math.floor(char.game_obj.health * 100 + 0.5)
+        if health_pct <= 0 then
+            status = ", Dead"
+        elseif health_pct == 100 then
+            status = ", Healthy"
+        elseif health_pct >= 80 then
+            status = ", Slightly injured"
+        elseif health_pct >= 40 then
+            status = ", Moderately injured"
+        elseif health_pct >= 20 then
+            status = ", Severely injured"
+        else
+            status = ", Near death"
+        end
+    end
+    --  status = ", " .. tostring(math.floor(char.game_obj.health * 100 + 0.5)) .. " percent Health"
+
+    if is_player(char.game_obj) then
+        status = status .. get_player_injury_status()
+        status = status .. get_player_radiation_status(char)
+    end
+
     if char.faction == "Monster" or char.faction == "Zombied" then
-        return "%s (%s)", {char.name, char.faction}
+        return "%s (%s" .. status .. ")", {char.name, char.faction}
     else
         -- Check for disguise (visual_faction)
         if char.visual_faction then
-             return "%s (%s %s, %s rep) [disguised as %s]", {char.name, char.experience, char.faction, char.reputation, char.visual_faction}
+             return "%s (%s %s, %s rep" .. status .. ") [disguised as %s]", {char.name, char.experience, char.faction, char.reputation, char.visual_faction}
         else
-            return "%s (%s %s, %s rep)", {char.name, char.experience, char.faction, char.reputation}
+            return "%s (%s %s, %s rep" .. status .. ")", {char.name, char.experience, char.faction, char.reputation}
         end
     end
+end
+
+function get_character_string(char)
+    local fmt, vals = get_character_event_info(char)
+    return string.format(fmt, unpack(vals))
 end
 
 function get_technical_name(object)
@@ -552,12 +644,19 @@ function iterate_nearest(location, distance, fun)
 end
 
 function is_living_character(obj)
-    must_exist(obj, "is_living_character")
-    return obj and (is_stalker(obj) or is_trader(obj)) and obj:alive()
+    return is_character(obj) and obj:alive()
 end
+
+function is_character(obj)
+    must_exist(obj, "is_living_character")
+    return obj and (is_stalker(obj) or is_trader(obj)) 
+end 
 
 -- Function to get a list of nearby allies
 function get_nearby_characters(center_object, distance, max, exclusion_list)
+    if (not center_object) then 
+		error("get_nearby_characters called with nil object")
+	end 
     -- Validate and set defaults for optional parameters
     distance = distance or config.EVENT_WITNESS_RANGE
     exclusion_list = exclusion_list or {}
@@ -570,6 +669,31 @@ function get_nearby_characters(center_object, distance, max, exclusion_list)
     local count = 0
     local function on_each_object(obj)
         if is_living_character(obj) then
+            characters[#characters+1] = obj
+
+            count = count + 1
+            if max and count >= max then
+                return false
+            end
+        end
+    end
+    level.iterate_nearest(location, distance, on_each_object)
+    return characters
+end
+
+function get_nearby_characters_even_dead(center_object, distance, max, exclusion_list)
+    -- Validate and set defaults for optional parameters
+    distance = distance or config.EVENT_WITNESS_RANGE
+    exclusion_list = exclusion_list or {}
+
+
+    local location = get_position(center_object)
+    if location == nil then return {} end
+
+    local characters = {}
+    local count = 0
+    local function on_each_object(obj)
+        if is_character(obj) then
             characters[#characters+1] = obj
 
             count = count + 1
@@ -985,9 +1109,27 @@ function get_time_scope(EventDate, scope)
     return tbl[scope]
 end
 
+function current_time_string_precise()
+     local current_time = game.get_game_time()
+        local month = get_time_scope(current_time, 2)
+        local day = get_time_scope(current_time, 3)
+        local hour = get_time_scope(current_time, 4)
+        local minute = get_time_scope(current_time, 5)
+        local month_names = {
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        }
+        local month_name = month_names[month] or tostring(month)
+        return string.format("%s %d at %02d:%02d", month_name, day, hour, minute)
+end 
 
 -- Function to get the current time as a string representing the time phase of the day
 function describe_current_time()
+    if talker_mcm.get("precise_time") then
+        return current_time_string_precise()
+
+    end
+
     local hrs = get_time_scope(game.get_game_time(), 4)
     if hrs < 6 then
         return "night"
@@ -1075,6 +1217,8 @@ function get_game_time_ms()
     return time_global() + game_time_since_last_load
 end
 
+
+
 function save_game_time(saved_data)
     log.info("Saving game time...")
     saved_data.game_time_since_last_load = get_game_time_ms()
@@ -1102,6 +1246,7 @@ end
 function is_loaded()
     return true
 end
+
 
 
 
