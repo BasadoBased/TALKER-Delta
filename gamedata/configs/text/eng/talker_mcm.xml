@@ -174,6 +174,9 @@
     <string id="ui_mcm_talker_show_player_injury_status">
         <text>Show player injury status in event descriptions (e.g. "right arm injury") Some AI may over-focus on it.</text>
     </string>
+    <string id="ui_mcm_talker_player_description">
+        <text>Player description. All characters will see this. Wrap in quotes or spaces will be lost on save. Use empty quotes "" to disable</text>
+    </string>
     <string id="ui_mcm_talker_base_dialogue_chance">
         <text>Base dialogue chance for unimportant events (important events such as the player speaking always generate dialogue)</text>
     </string>

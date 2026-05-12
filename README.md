@@ -22,6 +22,7 @@ Grounding the AI in the game engine. A fork of Coelacanthiform's TALKER-Expanded
 * Reworked AI queue system reduces duplicate requests
 * Reworked timestamp system makes it easier for AI to track events over time
 * Dead characters are now visible to the AI
+* Player description textbox in the mcm
 * Tweaks to the speaker selection AI (the fast AI) prompt to make it more reliable
 * Who the player is, is now "hidden" and they appear like a normal character to the AI instead of being revealed as the player.
 

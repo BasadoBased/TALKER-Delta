@@ -718,6 +718,9 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 	-- Safety check: ensure new_events is a table
 	new_events = new_events or {}
 
+	local player_desc = mcm.get("player_description") or ""
+	player_desc = player_desc:gsub('"', "")
+
 	local current_game_time = 0
 	if #new_events > 0 then
 		current_game_time = new_events[#new_events].game_time_ms
@@ -929,6 +932,9 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 	local speaking_style = ""
 	local reputation_text = ""
 
+	local player = game.get_player_character()
+
+
 	if speaker then
 		local faction_text = get_faction_description(speaker.faction)
 		if not faction_text then
@@ -964,6 +970,10 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 		if inventory_text and inventory_text ~= "" then
 			inventory_info = " \n### INVENTORY: " .. inventory_text .. " \n"
 		end
+		local player_info = ""
+		if player_desc and player_desc ~= "" then
+			player_info = " \n## Other Character Descriptions:\n- " .. player.name .. ": " .. player_desc .. " \n"
+		end
 
 		speaker_info = "### NAME: "
 			.. speaker.name
@@ -978,6 +988,7 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 			.. reputation_text
 			.. weapon_info
 		.. inventory_info
+		.. player_info
 
 		local character_anchor = "- **SUBTLETY:** The 'DEFINING CHARACTER TRAIT/BACKSTORY' should inform your characterisation subtly. Do not explicitly reference it in every response (e.g., if your backstory says you are in debt to the mob, be generally more focused on making money rather than say 'I'm in debt to the mob').\n"
 			.. "- **PRIORITY:** Your individual personality always takes precedence over general faction traits.\n"
@@ -1073,7 +1084,6 @@ function prompt_builder.create_dialogue_request_prompt(speaker, memory_context)
 
 	-- FINAL CHECKS AND INSTRUCTIONS
 	-- Task definition
-	local player = game.get_player_character()
 	local companion_status = ""
 	if speaker_obj and query.is_companion(speaker_obj) then
 		companion_status = ", who is a travelling with " .. player.name .. " as their companion"

@@ -210,6 +210,13 @@ function on_mcm_load()
                 def = false,
             },
             {
+                id = "player_description",
+                type = "input",
+                val = "",
+                def = "",
+                name = "ui_mcm_talker_player_description",
+            },
+            {
                 id = "action_descriptions",
                 type = "check",
                 val = 1,
