@@ -24,7 +24,7 @@ local MODEL = {
 
 -- sampling presets
 local PRESET = {
-	creative = { temperature = 0.9, max_tokens = 3000, top_p = 1, frequency_penalty = 0, presence_penalty = 0 },
+	creative = { temperature = 1, max_tokens = 3000, top_p = 1, frequency_penalty = 0, presence_penalty = 0 },
 	strict = { temperature = 0.0, max_tokens = 3000, top_p = 1, frequency_penalty = 0, presence_penalty = 0 },
 }
 
