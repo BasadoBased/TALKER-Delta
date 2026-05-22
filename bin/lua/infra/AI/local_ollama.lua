@@ -24,8 +24,8 @@ local MODEL = {
 
 -- sampling presets
 local PRESET = {
-	creative = { temperature = 0.9, max_tokens = 150, top_p = 1, frequency_penalty = 0, presence_penalty = 0 },
-	strict = { temperature = 0.0, max_tokens = 150, top_p = 1, frequency_penalty = 0, presence_penalty = 0 },
+	creative = { temperature = 0.9, max_tokens = 3000, top_p = 1, frequency_penalty = 0, presence_penalty = 0 },
+	strict = { temperature = 0.0, max_tokens = 3000, top_p = 1, frequency_penalty = 0, presence_penalty = 0 },
 }
 
 -- helpers --------------------------------------------------------------
@@ -78,7 +78,7 @@ function ollama.generate_dialogue(msgs, callback)
 end
 
 function ollama.pick_speaker(msgs, callback)
-	return send(msgs, callback, { model = MODEL.fast, temperature = 0.0, max_tokens = 30 })
+	return send(msgs, callback, { model = MODEL.fast, temperature = 0.0, max_tokens = 3000 })
 end
 
 function ollama.summarize_story(msgs, callback)

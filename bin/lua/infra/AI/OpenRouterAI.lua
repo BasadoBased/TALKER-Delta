@@ -17,8 +17,8 @@ local MODEL = {
 
 -- sampling presets
 local PRESET = {
-	creative = { temperature = 0.9, max_tokens = 150, top_p = 1, frequency_penalty = 0, presence_penalty = 0 },
-	strict = { temperature = 0.0, max_tokens = 150, top_p = 1, frequency_penalty = 0, presence_penalty = 0 },
+	creative = { temperature = 0.9, max_tokens = 3000, top_p = 1, frequency_penalty = 0, presence_penalty = 0 },
+	strict = { temperature = 0.0, max_tokens = 3000, top_p = 1, frequency_penalty = 0, presence_penalty = 0 },
 }
 
 -- helpers --------------------------------------------------------------
@@ -74,7 +74,7 @@ function openrouter.generate_dialogue(msgs, cb)
 end
 
 function openrouter.pick_speaker(msgs, cb)
-	return send(msgs, cb, { model = MODEL.fast, temperature = 0.0, max_tokens = 30 })
+	return send(msgs, cb, { model = MODEL.fast, temperature = 0.0, max_tokens = 3000 })
 end
 
 function openrouter.summarize_story(msgs, cb)
