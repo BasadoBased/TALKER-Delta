@@ -1,6 +1,7 @@
 package.path = package.path .. ";./bin/lua/?.lua;"
 local logger = require("framework.logger")
 local Event = require("domain.model.event")
+local mcm = talker_mcm
 
 -- Define the EventStore class
 local EventStore = {
@@ -38,6 +39,9 @@ end
 function EventStore:load_save_data(saved_events)
 	logger.info("Loading event store...")
 	self.events = saved_events or {}
+	if mcm.get("reset_memories") then
+		self.events = {}
+	end 
 
 	-- Rebuild sorted_keys and count
 	self.sorted_keys = {}

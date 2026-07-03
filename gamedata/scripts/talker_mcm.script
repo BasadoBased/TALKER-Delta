@@ -179,6 +179,19 @@ function on_mcm_load()
                 val = 1,
                 def = false,
             },
+             -- Reset memories
+            {
+                id = "reset_memories_title",
+                type = "desc",
+                clr = {200, 200, 255, 200},
+                text = "ui_mcm_talker_reset_memories_title"
+            },
+            {
+                id = "reset_memories",
+                type = "check",
+                val = 1,
+                def = false,
+            },
             --General configuration
             {
                 id = "general_configuration_title",
@@ -378,6 +391,7 @@ local defaults = {
     ["whisper_modifier"] = 0,
     ["reset_personality"] = false,
     ["reset_backstory"] = false,
+    ["reset_memories"] = false,
     ["enable_trigger_proximity_anomalies"] = 0,
     ["enable_trigger_damage_anomalies"] = 0,
     ["enable_trigger_artifact_use"] = 2,
