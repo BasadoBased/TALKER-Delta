@@ -9,14 +9,14 @@ Character = {}
 function Character.new(game_id, name, experience, faction, reputation, weapon, visual_faction, weapon_status, game_obj)
 	new_char = {
 		game_id = game_id,
+		game_obj = game_obj,
 		name = name,
-		experience = experience,
 		faction = faction,
+		experience = experience,
 		reputation = reputation,
 		weapon = weapon,
 		visual_faction = visual_faction,
 		weapon_status = weapon_status,
-		game_obj = game_obj
 	}
 	new_char.backstory = backstories.get_backstory(new_char)
 	new_char.personality = personalities.get_personality(new_char)

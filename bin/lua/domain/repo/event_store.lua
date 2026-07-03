@@ -46,9 +46,25 @@ function EventStore:load_save_data(saved_events)
 	-- Rebuild sorted_keys and count
 	self.sorted_keys = {}
 	local count = 0
-	for k in pairs(self.events) do
+	for k, event in pairs(self.events) do
 		table.insert(self.sorted_keys, k)
 		count = count + 1
+
+		-- Process event.witnesses table
+		if event.witnesses then
+			for _, witness in ipairs(event.witnesses) do
+				-- clean up shite
+				
+				-- witness.reputation = "",
+				-- witness.weapon = "",
+				-- witness.visual_faction = "",
+				-- witness.weapon_status = "",
+				witness.backstory = ""
+				witness.personality = ""
+				-- witness.health = ""
+			end
+		end
+
 	end
 	table.sort(self.sorted_keys)
 
