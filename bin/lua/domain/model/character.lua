@@ -6,6 +6,8 @@ local log = require("framework.logger")
 -- Character class definition
 Character = {}
 
+-- Bloat warning: All of this is serialized to each message (1000s of times)
+-- Undo it in EventStore:load_save_data
 function Character.new(game_id, name, experience, faction, reputation, weapon, visual_faction, weapon_status, game_obj)
 	new_char = {
 		game_id = game_id,
